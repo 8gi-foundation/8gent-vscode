@@ -209,14 +209,14 @@ export function getChatHTML(
     .tok-op { color: var(--vscode-descriptionForeground); }
     .tok-prop { color: var(--vscode-symbolIcon-propertyForeground, #9cdcfe); }
     /* Apply button on code blocks */
-    .apply-btn {
+    .apply-btn, .diff-btn {
       border: none; background: none;
       color: var(--vscode-descriptionForeground);
       cursor: pointer; font-size: 10px;
       padding: 2px 6px; border-radius: 3px;
-      margin-left: 4px;
+      margin-left: 2px;
     }
-    .apply-btn:hover {
+    .apply-btn:hover, .diff-btn:hover {
       background: var(--vscode-toolbar-hoverBackground);
       color: var(--vscode-foreground);
     }
@@ -571,7 +571,7 @@ export function getChatHTML(
         const langLabel = lang || 'code';
         const highlighted = highlightCode(code.trim(), langLabel);
         const id = 'cb-' + Math.random().toString(36).slice(2, 8);
-        return '<div class="code-block-wrap" id="' + id + '"><div class="code-block-header"><span class="lang">' + langLabel + '</span><span><button class="copy-btn" onclick="copyCode(this)">Copy</button><button class="apply-btn" onclick="applyCode(this)" title="Insert into editor">Apply</button></span></div><pre class="code-block"><code>' + highlighted + '</code></pre></div>';
+        return '<div class="code-block-wrap" id="' + id + '"><div class="code-block-header"><span class="lang">' + langLabel + '</span><span><button class="copy-btn" onclick="copyCode(this)">Copy</button><button class="diff-btn" onclick="diffCode(this)" title="Preview diff">Diff</button><button class="apply-btn" onclick="applyCode(this)" title="Insert into editor">Apply</button></span></div><pre class="code-block"><code>' + highlighted + '</code></pre></div>';
       });
       // Inline code
       text = text.replace(/\`([^\`]+)\`/g, '<code class="inline">$1</code>');
@@ -616,6 +616,12 @@ export function getChatHTML(
       btn.textContent = 'Applied!';
       btn.classList.add('applied');
       setTimeout(() => { btn.textContent = 'Apply'; btn.classList.remove('applied'); }, 2000);
+    };
+
+    // ---- Diff preview ----
+    window.diffCode = function(btn) {
+      const code = btn.closest('.code-block-wrap').querySelector('code').textContent;
+      vscode.postMessage({ type: 'diffCode', code: code });
     };
 
     // ---- Messages ----

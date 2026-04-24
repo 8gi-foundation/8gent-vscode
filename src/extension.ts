@@ -120,6 +120,9 @@ export async function activate(context: vscode.ExtensionContext) {
           case "applyCode":
             applyCodeToEditor(msg.code);
             break;
+          case "diffCode":
+            showDiffPreview(msg.code);
+            break;
           case "mentionQuery":
             handleMentionQuery(msg.query, webviewView.webview);
             break;
@@ -366,6 +369,43 @@ async function handleMentionQuery(query: string, webview: vscode.Webview): Promi
   } catch {
     webview.postMessage({ type: "mentionResults", files: [] });
   }
+}
+
+/** Show diff between current editor content and proposed code */
+async function showDiffPreview(proposedCode: string): Promise<void> {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) {
+    vscode.window.showWarningMessage("8gent: No active editor for diff preview");
+    return;
+  }
+
+  const currentContent = editor.selection.isEmpty
+    ? editor.document.getText()
+    : editor.document.getText(editor.selection);
+
+  // Create virtual documents for diff
+  const originalUri = vscode.Uri.parse("8gent-diff:Current");
+  const proposedUri = vscode.Uri.parse("8gent-diff:Proposed");
+
+  // Register a temporary content provider
+  const provider = new (class implements vscode.TextDocumentContentProvider {
+    provideTextDocumentContent(uri: vscode.Uri): string {
+      return uri.path === "Current" ? currentContent : proposedCode;
+    }
+  })();
+
+  const reg = vscode.workspace.registerTextDocumentContentProvider("8gent-diff", provider);
+
+  await vscode.commands.executeCommand(
+    "vscode.diff",
+    originalUri,
+    proposedUri,
+    "8gent: Current vs Proposed",
+    { preview: true }
+  );
+
+  // Clean up after a delay
+  setTimeout(() => reg.dispose(), 60000);
 }
 
 /** Insert code at cursor position in active editor */
