@@ -533,6 +533,7 @@ export function getChatHTML(
       <button class="provider-badge ${providerLocal ? "local" : ""}" id="providerBtn" title="Click to switch provider">${providerName}${modelLabel}</button>
       <button class="icon-btn" id="exportBtn" title="Export chat as Markdown">\u21E9</button>
       <button class="icon-btn" id="newChatBtn" title="New chat">+</button>
+      <button class="icon-btn" id="settingsBtn" title="Settings">\u2699</button>
     </div>
   </div>
 
@@ -594,6 +595,7 @@ export function getChatHTML(
     let currentAssistantEl = null;
     let startTime = 0;
     let contextItems = [];
+    let wordCount = 0;
 
     // ---- Scroll to bottom ----
     messagesEl.addEventListener('scroll', () => {
@@ -607,6 +609,9 @@ export function getChatHTML(
     // ---- Provider badge ----
     providerBtn.addEventListener('click', () => vscode.postMessage({ type: 'switchProvider' }));
     newChatBtn.addEventListener('click', () => vscode.postMessage({ type: 'newChat' }));
+    document.getElementById('settingsBtn').addEventListener('click', () => {
+      vscode.postMessage({ type: 'openSettings' });
+    });
     document.getElementById('exportBtn').addEventListener('click', () => {
       // Build markdown from visible messages
       const msgs = messagesEl.querySelectorAll('.msg-wrap');
@@ -646,6 +651,7 @@ export function getChatHTML(
         actionIcon.textContent = '\\u25A0'; // square stop
         statusHint.textContent = 'Generating...';
         startTime = Date.now();
+        wordCount = 0;
       } else {
         actionBtn.className = 'action-btn send-btn';
         actionBtn.title = 'Send (Enter)';
@@ -1092,6 +1098,12 @@ export function getChatHTML(
       currentAssistantEl.setAttribute('data-raw', rawAssistantText);
       scrollToBottom();
       pendingRender = false;
+      // Update word count in status
+      if (streaming) {
+        wordCount = rawAssistantText.split(/\\s+/).filter(w => w).length;
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
+        statusHint.textContent = wordCount + ' words - ' + elapsed + 's';
+      }
     }
 
     function scheduleRender() {
@@ -1133,8 +1145,10 @@ export function getChatHTML(
           if (currentAssistantEl && currentAssistantEl.parentElement) {
             const meta = document.createElement('div');
             meta.className = 'response-meta';
-            meta.textContent = elapsed + 's';
-            if (msg.tokens) meta.textContent += ' - ' + msg.tokens + ' tokens';
+            const parts = [elapsed + 's'];
+            if (wordCount) parts.push(wordCount + ' words');
+            if (msg.model) parts.push(msg.model);
+            meta.textContent = parts.join(' - ');
             currentAssistantEl.parentElement.appendChild(meta);
           }
           currentAssistantEl = null;

@@ -141,6 +141,9 @@ export async function activate(context: vscode.ExtensionContext) {
           case "mentionFile":
             mentionedFiles.add(msg.file);
             break;
+          case "openSettings":
+            vscode.commands.executeCommand("workbench.action.openSettings", "8gent");
+            break;
           case "switchProvider":
             vscode.commands.executeCommand("8gent.switchProvider");
             break;
@@ -357,7 +360,7 @@ async function handleChat(
 
     chatHistory.push({ role: "assistant", content: response, timestamp: Date.now() });
     await saveHistory();
-    webview.postMessage({ type: "done" });
+    webview.postMessage({ type: "done", model: currentModelName || currentProviderName });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     // Remove the failed user message from history
