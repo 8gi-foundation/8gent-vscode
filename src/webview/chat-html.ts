@@ -701,23 +701,42 @@ export function getChatHTML(
         text = before + '<div class="think-block"><div class="think-header"><span class="think-chevron">\\u25BC</span> Thinking...</div><div class="think-body">' + thinkContent + '</div></div>';
       }
 
-      // Code blocks with syntax highlighting
+      // Code blocks with syntax highlighting (closed blocks)
       text = text.replace(/\`\`\`(\\w*)?\\n([\\s\\S]*?)\`\`\`/g, (_, lang, code) => {
         const langLabel = lang || 'code';
         const highlighted = highlightCode(code.trim(), langLabel);
         const id = 'cb-' + Math.random().toString(36).slice(2, 8);
         return '<div class="code-block-wrap" id="' + id + '"><div class="code-block-header"><span class="lang">' + langLabel + '</span><span><button class="copy-btn" onclick="copyCode(this)">Copy</button><button class="diff-btn" onclick="diffCode(this)" title="Preview diff">Diff</button><button class="apply-btn" onclick="applyCode(this)" title="Insert into editor">Apply</button></span></div><pre class="code-block"><code>' + highlighted + '</code></pre></div>';
       });
+      // Handle unclosed code blocks during streaming
+      if (isStreaming) {
+        text = text.replace(/\`\`\`(\\w*)?\\n([\\s\\S]*)$/g, (_, lang, code) => {
+          const langLabel = lang || 'code';
+          const highlighted = highlightCode(code, langLabel);
+          return '<div class="code-block-wrap"><div class="code-block-header"><span class="lang">' + langLabel + '</span><span style="font-size:10px;opacity:0.5;">typing...</span></div><pre class="code-block"><code>' + highlighted + '</code></pre></div>';
+        });
+      }
       // Inline code
       text = text.replace(/\`([^\`]+)\`/g, '<code class="inline">$1</code>');
       // Bold
       text = text.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
       // Italic
       text = text.replace(/\\*([^*]+)\\*/g, '<em>$1</em>');
+      // Strikethrough
+      text = text.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+      // Blockquotes
+      text = text.replace(/^> (.+)$/gm, '<blockquote style="border-left:3px solid var(--vscode-panel-border);padding-left:10px;margin:4px 0;color:var(--vscode-descriptionForeground);font-style:italic;">$1</blockquote>');
+      text = text.replace(/<\\/blockquote>\\s*<blockquote[^>]*>/g, '<br>');
+      // Horizontal rules
+      text = text.replace(/^---+$/gm, '<hr style="border:none;border-top:1px solid var(--vscode-panel-border);margin:8px 0;">');
       // Headers
       text = text.replace(/^### (.+)$/gm, '<h3>$1</h3>');
       text = text.replace(/^## (.+)$/gm, '<h2>$1</h2>');
       text = text.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+      // Links [text](url)
+      text = text.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2" title="$2">$1</a>');
+      // Auto-link URLs
+      text = text.replace(/(?<![="'])\\b(https?:\\/\\/[^\\s<]+)/g, '<a href="$1">$1</a>');
       // Numbered lists
       text = text.replace(/^\\d+\\. (.+)$/gm, '<li>$1</li>');
       // Bullet lists
