@@ -1,0 +1,166 @@
+{
+  "name": "8gent-vscode",
+  "displayName": "8gent",
+  "description": "Local-first AI agent in your editor. Connects to Ollama, Apple Foundation Model, LM Studio, and your 8gent vessel.",
+  "version": "0.1.0",
+  "publisher": "8gi-foundation",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/8gi-foundation/8gent-vscode"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "ai",
+    "agent",
+    "ollama",
+    "local",
+    "coding assistant"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "icon": "media/icon.png",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "8gent",
+          "title": "8gent",
+          "icon": "media/sidebar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "8gent": [
+        {
+          "type": "webview",
+          "id": "8gent.chat",
+          "name": "Chat"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "8gent.newChat",
+        "title": "8gent: New Chat"
+      },
+      {
+        "command": "8gent.sendSelection",
+        "title": "8gent: Send Selection to Chat"
+      },
+      {
+        "command": "8gent.reconnect",
+        "title": "8gent: Reconnect to Provider"
+      },
+      {
+        "command": "8gent.switchProvider",
+        "title": "8gent: Switch Provider"
+      }
+    ],
+    "configuration": {
+      "title": "8gent",
+      "properties": {
+        "8gent.provider": {
+          "type": "string",
+          "default": "ollama",
+          "enum": [
+            "ollama",
+            "lmstudio",
+            "apfel",
+            "vessel",
+            "openrouter"
+          ],
+          "enumDescriptions": [
+            "Ollama (local, default)",
+            "LM Studio (local)",
+            "Apple Foundation Model (M-series Mac)",
+            "8gent Vessel (cloud, requires auth)",
+            "OpenRouter (cloud, requires API key)"
+          ],
+          "description": "Active AI provider"
+        },
+        "8gent.ollama.endpoint": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Ollama API endpoint"
+        },
+        "8gent.ollama.model": {
+          "type": "string",
+          "default": "qwen2.5-coder:7b",
+          "description": "Ollama model name"
+        },
+        "8gent.lmstudio.endpoint": {
+          "type": "string",
+          "default": "http://localhost:1234",
+          "description": "LM Studio API endpoint"
+        },
+        "8gent.lmstudio.model": {
+          "type": "string",
+          "default": "",
+          "description": "LM Studio model (leave empty for default)"
+        },
+        "8gent.vessel.url": {
+          "type": "string",
+          "default": "",
+          "description": "Vessel daemon WebSocket URL (e.g. ws://localhost:18789 or wss://eight-vessel.fly.dev)"
+        },
+        "8gent.vessel.channel": {
+          "type": "string",
+          "default": "app",
+          "description": "Session channel tag for vessel"
+        },
+        "8gent.openrouter.model": {
+          "type": "string",
+          "default": "auto:free",
+          "description": "OpenRouter model ID"
+        },
+        "8gent.contextInjection": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include current file, selection, and open tabs as context"
+        },
+        "8gent.syncEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable cloud sync via 8gent.app (requires login)"
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "8gent.sendSelection",
+        "key": "ctrl+shift+8",
+        "mac": "cmd+shift+8",
+        "when": "editorHasSelection"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "8gent.sendSelection",
+          "when": "editorHasSelection",
+          "group": "8gent"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",
+    "watch": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap --watch",
+    "package": "vsce package",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.0"
+  }
+}
