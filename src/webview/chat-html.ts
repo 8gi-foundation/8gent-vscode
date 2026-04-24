@@ -778,6 +778,7 @@ export function getChatHTML(
       }
 
       addMessage('user', text);
+      pushHistory(text);
       inputEl.value = '';
       inputEl.style.height = 'auto';
       clearContextPills();
@@ -800,10 +801,75 @@ export function getChatHTML(
       }
     });
 
+    // ---- Input history (Up/Down arrows recall previous messages) ----
+    let inputHistory = [];
+    let historyIndex = -1;
+    let savedInput = '';
+
+    function pushHistory(text) {
+      if (text && (inputHistory.length === 0 || inputHistory[inputHistory.length - 1] !== text)) {
+        inputHistory.push(text);
+      }
+      historyIndex = -1;
+    }
+
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowUp' && inputEl.value === '' && inputHistory.length > 0) {
+        e.preventDefault();
+        if (historyIndex === -1) { savedInput = inputEl.value; historyIndex = inputHistory.length; }
+        if (historyIndex > 0) {
+          historyIndex--;
+          inputEl.value = inputHistory[historyIndex];
+        }
+      }
+      if (e.key === 'ArrowDown' && historyIndex >= 0) {
+        e.preventDefault();
+        historyIndex++;
+        if (historyIndex >= inputHistory.length) {
+          historyIndex = -1;
+          inputEl.value = savedInput;
+        } else {
+          inputEl.value = inputHistory[historyIndex];
+        }
+      }
+    });
+
     // Auto-resize
     inputEl.addEventListener('input', () => {
       inputEl.style.height = 'auto';
       inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+    });
+
+    // ---- Drag and drop files ----
+    const dropOverlay = document.createElement('div');
+    dropOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,100,200,0.1);border:2px dashed var(--vscode-focusBorder);z-index:1000;display:none;align-items:center;justify-content:center;pointer-events:none;';
+    dropOverlay.innerHTML = '<div style="font-size:13px;color:var(--vscode-foreground);background:var(--vscode-editor-background);padding:8px 16px;border-radius:6px;border:1px solid var(--vscode-panel-border);">Drop file to add as context</div>';
+    document.body.appendChild(dropOverlay);
+
+    let dragCounter = 0;
+    document.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      dragCounter++;
+      if (dragCounter === 1) dropOverlay.style.display = 'flex';
+    });
+    document.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dragCounter--;
+      if (dragCounter <= 0) { dragCounter = 0; dropOverlay.style.display = 'none'; }
+    });
+    document.addEventListener('dragover', (e) => e.preventDefault());
+    document.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dragCounter = 0;
+      dropOverlay.style.display = 'none';
+      // VS Code webviews don't get real File objects, but we get the text/plain path
+      const text = e.dataTransfer.getData('text/plain');
+      if (text) {
+        // Looks like a file path - use it as a mention
+        const path = text.replace(/^file:\\/\\//, '');
+        addContextPill(path, true);
+        vscode.postMessage({ type: 'mentionFile', file: path });
+      }
     });
 
     // ---- File icons ----
@@ -1032,6 +1098,10 @@ export function getChatHTML(
           providerBtn.className = 'provider-badge' + (msg.local ? ' local' : '');
           addMessage('system', 'Switched to ' + msg.name + (msg.model ? ' - ' + msg.model : ''));
           statusHint.textContent = 'Ready';
+          break;
+        }
+        case 'focusInput': {
+          inputEl.focus();
           break;
         }
       }

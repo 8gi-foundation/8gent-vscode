@@ -65,6 +65,10 @@
       {
         "command": "8gent.pickModel",
         "title": "8gent: Pick Model"
+      },
+      {
+        "command": "8gent.focusChat",
+        "title": "8gent: Focus Chat"
       }
     ],
     "configuration": {
@@ -142,6 +146,11 @@
         "key": "ctrl+shift+8",
         "mac": "cmd+shift+8",
         "when": "editorHasSelection"
+      },
+      {
+        "command": "8gent.focusChat",
+        "key": "ctrl+l",
+        "mac": "cmd+l"
       }
     ],
     "menus": {

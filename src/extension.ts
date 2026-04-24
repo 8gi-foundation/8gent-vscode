@@ -250,6 +250,17 @@ export async function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  // Focus chat command (Cmd+L)
+  context.subscriptions.push(
+    vscode.commands.registerCommand("8gent.focusChat", () => {
+      vscode.commands.executeCommand("8gent.chat.focus");
+      // Post a focus message to the webview so it focuses the input
+      setTimeout(() => {
+        chatPanel?.webview.postMessage({ type: "focusInput" });
+      }, 100);
+    })
+  );
+
   // Watch for config changes
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
