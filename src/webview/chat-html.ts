@@ -265,6 +265,56 @@ export function getChatHTML(
     .thinking-dot:nth-child(3) { animation-delay: 0.4s; }
     @keyframes pulse { 0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); } 40% { opacity: 1; transform: scale(1); } }
 
+    /* Model thinking blocks (<think> from qwen3, deepseek, etc.) */
+    .think-block {
+      margin: 6px 0;
+      border-radius: 6px;
+      border: 1px solid var(--vscode-panel-border);
+      overflow: hidden;
+    }
+    .think-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      background: var(--vscode-editorGroupHeader-tabsBackground);
+      cursor: pointer;
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+      user-select: none;
+    }
+    .think-header:hover { color: var(--vscode-foreground); }
+    .think-chevron {
+      font-size: 10px;
+      transition: transform 0.2s;
+      display: inline-block;
+    }
+    .think-block.collapsed .think-chevron { transform: rotate(-90deg); }
+    .think-body {
+      padding: 8px 12px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--vscode-descriptionForeground);
+      background: var(--vscode-textCodeBlock-background);
+      max-height: 300px;
+      overflow-y: auto;
+      transition: max-height 0.2s ease;
+    }
+    .think-block.collapsed .think-body { display: none; }
+    .think-body p { margin: 3px 0; }
+
+    /* Streaming cursor */
+    .streaming-cursor {
+      display: inline-block;
+      width: 2px;
+      height: 1em;
+      background: var(--vscode-editorCursor-foreground, var(--vscode-foreground));
+      margin-left: 2px;
+      vertical-align: text-bottom;
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
     /* Context pills */
     .context-pills {
       display: flex;
@@ -565,7 +615,21 @@ export function getChatHTML(
     }
 
     // ---- Markdown rendering ----
-    function renderMarkdown(text) {
+    function renderMarkdown(text, isStreaming) {
+      // Handle <think> blocks from reasoning models (qwen3, deepseek, etc.)
+      text = text.replace(/<think>([\\s\\S]*?)<\\/think>/g, (_, content) => {
+        const id = 'think-' + Math.random().toString(36).slice(2, 8);
+        const rendered = content.trim().replace(/\\n/g, '<br>');
+        return '<div class="think-block collapsed" id="' + id + '"><div class="think-header" onclick="this.parentElement.classList.toggle(\'collapsed\')"><span class="think-chevron">\\u25BC</span> Reasoning</div><div class="think-body">' + rendered + '</div></div>';
+      });
+      // Handle unclosed <think> during streaming (model still thinking)
+      if (isStreaming && text.includes('<think>') && !text.includes('</think>')) {
+        const parts = text.split('<think>');
+        const before = parts[0];
+        const thinkContent = parts.slice(1).join('').trim().replace(/\\n/g, '<br>');
+        text = before + '<div class="think-block"><div class="think-header"><span class="think-chevron">\\u25BC</span> Thinking...</div><div class="think-body">' + thinkContent + '</div></div>';
+      }
+
       // Code blocks with syntax highlighting
       text = text.replace(/\`\`\`(\\w*)?\\n([\\s\\S]*?)\`\`\`/g, (_, lang, code) => {
         const langLabel = lang || 'code';
@@ -592,7 +656,9 @@ export function getChatHTML(
       // Paragraphs
       text = text.replace(/\\n\\n/g, '</p><p>');
       text = text.replace(/(?<!<\\/?[^>]+)\\n/g, '<br>');
-      return '<p>' + text + '</p>';
+      let html = '<p>' + text + '</p>';
+      if (isStreaming) html += '<span class="streaming-cursor"></span>';
+      return html;
     }
 
     function escapeHtml(str) {
@@ -835,6 +901,25 @@ export function getChatHTML(
 
     // ---- Handle messages from extension ----
     let rawAssistantText = '';
+    let renderTimer = null;
+    let pendingRender = false;
+
+    function flushRender() {
+      if (!currentAssistantEl || !rawAssistantText) return;
+      currentAssistantEl.innerHTML = renderMarkdown(rawAssistantText, streaming);
+      currentAssistantEl.setAttribute('data-raw', rawAssistantText);
+      scrollToBottom();
+      pendingRender = false;
+    }
+
+    function scheduleRender() {
+      if (renderTimer) return; // already scheduled
+      pendingRender = true;
+      renderTimer = setTimeout(() => {
+        renderTimer = null;
+        if (pendingRender) flushRender();
+      }, 40); // ~25fps - smooth without CPU waste
+    }
 
     window.addEventListener('message', (event) => {
       const msg = event.data;
@@ -847,16 +932,21 @@ export function getChatHTML(
             currentAssistantEl = addMessage('assistant', '', { html: true });
           }
           rawAssistantText += msg.text;
-          currentAssistantEl.innerHTML = renderMarkdown(rawAssistantText);
-          currentAssistantEl.setAttribute('data-raw', rawAssistantText);
-          scrollToBottom();
+          scheduleRender();
           break;
         }
         case 'done': {
           removeThinking();
+          // Flush any pending render immediately, then final render without cursor
+          if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
           setStreaming(false);
           const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
           statusHint.textContent = 'Done in ' + elapsed + 's';
+          // Final render without streaming cursor
+          if (currentAssistantEl && rawAssistantText) {
+            currentAssistantEl.innerHTML = renderMarkdown(rawAssistantText, false);
+            currentAssistantEl.setAttribute('data-raw', rawAssistantText);
+          }
           // Add response meta
           if (currentAssistantEl && currentAssistantEl.parentElement) {
             const meta = document.createElement('div');
@@ -929,7 +1019,7 @@ export function getChatHTML(
                 addMessage('user', m.content);
               } else if (m.role === 'assistant') {
                 const el = addMessage('assistant', '', { html: true });
-                el.innerHTML = renderMarkdown(m.content);
+                el.innerHTML = renderMarkdown(m.content, false);
                 el.setAttribute('data-raw', m.content);
               }
             }
