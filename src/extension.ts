@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import type { ChatMessage, Provider, WorkspaceContext } from "./types";
 import { createProvider, detectProviders, pickProvider, type ProviderName, PROVIDER_LABELS } from "./providers";
 import { OllamaProvider } from "./providers/ollama";
+import { OpenRouterProvider } from "./providers/openrouter";
 import { gatherContext } from "./context";
 import { getChatHTML } from "./webview/chat-html";
 
@@ -37,6 +38,17 @@ export async function activate(context: vscode.ExtensionContext) {
       await (currentProvider as { loadAuth: (s: vscode.SecretStorage) => Promise<void> }).loadAuth(
         context.secrets
       );
+    }
+
+    // Load OpenRouter API key
+    if (currentProvider instanceof OpenRouterProvider) {
+      await currentProvider.loadApiKey(context.secrets);
+      if (!currentProvider["apiKey"]) {
+        const set = await currentProvider.promptApiKey(context.secrets);
+        if (!set) {
+          return false;
+        }
+      }
     }
 
     const healthy = await currentProvider.healthCheck();

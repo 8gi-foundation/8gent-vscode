@@ -4,6 +4,7 @@ import { OllamaProvider } from "./ollama";
 import { LMStudioProvider } from "./lmstudio";
 import { ApfelProvider } from "./apfel";
 import { VesselProvider } from "./vessel";
+import { OpenRouterProvider } from "./openrouter";
 
 export type ProviderName = "ollama" | "lmstudio" | "apfel" | "vessel" | "openrouter";
 
@@ -42,9 +43,7 @@ export function createProvider(name: ProviderName): Provider {
       );
 
     case "openrouter":
-      // OpenRouter uses the same OpenAI-compatible API as LM Studio
-      return new LMStudioProvider(
-        "https://openrouter.ai/api",
+      return new OpenRouterProvider(
         config.get("openrouter.model", "auto:free")
       );
 
