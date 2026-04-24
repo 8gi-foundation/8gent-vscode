@@ -366,6 +366,47 @@ export function getChatHTML(
     }
     textarea::placeholder { color: var(--vscode-input-placeholderForeground); }
 
+    /* @mention autocomplete */
+    .mention-list {
+      position: absolute;
+      bottom: 100%;
+      left: 0;
+      right: 0;
+      max-height: 200px;
+      overflow-y: auto;
+      background: var(--vscode-editorSuggestWidget-background);
+      border: 1px solid var(--vscode-editorSuggestWidget-border);
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 100;
+      display: none;
+    }
+    .mention-list.visible { display: block; }
+    .mention-item {
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--vscode-editorSuggestWidget-foreground);
+    }
+    .mention-item:hover, .mention-item.selected {
+      background: var(--vscode-editorSuggestWidget-selectedBackground);
+      color: var(--vscode-editorSuggestWidget-highlightForeground, var(--vscode-foreground));
+    }
+    .mention-item .icon {
+      font-size: 10px;
+      opacity: 0.6;
+      width: 14px;
+      text-align: center;
+    }
+    .mention-item .path {
+      opacity: 0.5;
+      margin-left: auto;
+      font-size: 10px;
+    }
+
     .action-btn {
       width: 28px; height: 28px;
       display: flex; align-items: center; justify-content: center;
@@ -422,8 +463,11 @@ export function getChatHTML(
 
   <div class="input-area">
     <div id="contextPills" class="context-pills" style="display:none;"></div>
+    <div style="position: relative;">
+      <div class="mention-list" id="mentionList"></div>
+    </div>
     <div class="input-wrap">
-      <textarea id="input" rows="1" placeholder="Ask 8gent..." autofocus></textarea>
+      <textarea id="input" rows="1" placeholder="Ask 8gent... (@ to mention a file)" autofocus></textarea>
       <button class="action-btn send-btn" id="actionBtn" title="Send (Enter)">
         <span id="actionIcon">\u2191</span>
       </button>
@@ -690,6 +734,83 @@ export function getChatHTML(
       inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
     });
 
+    // ---- File icons ----
+    function getFileIcon(ext) {
+      const icons = { ts: 'TS', tsx: 'TX', js: 'JS', jsx: 'JX', py: 'PY', rs: 'RS', go: 'GO', md: 'MD', json: 'JN', css: 'CS', html: 'HT', svg: 'SV', yaml: 'YM', yml: 'YM', toml: 'TM', sh: 'SH', sql: 'SQ' };
+      return icons[ext] || ext.slice(0, 2).toUpperCase() || 'F';
+    }
+
+    // ---- @mention autocomplete ----
+    const mentionList = document.getElementById('mentionList');
+    let mentionFiles = [];
+    let mentionSelectedIndex = 0;
+    let mentionQuery = '';
+    let mentionActive = false;
+
+    inputEl.addEventListener('input', (e) => {
+      const val = inputEl.value;
+      const cursor = inputEl.selectionStart || 0;
+      // Find @ before cursor
+      const before = val.slice(0, cursor);
+      const atMatch = before.match(/@([\\w.\\-\\/]*)$/);
+
+      if (atMatch) {
+        mentionQuery = atMatch[1].toLowerCase();
+        mentionActive = true;
+        vscode.postMessage({ type: 'mentionQuery', query: mentionQuery });
+      } else {
+        mentionActive = false;
+        mentionList.classList.remove('visible');
+      }
+    });
+
+    inputEl.addEventListener('keydown', (e) => {
+      if (!mentionActive || !mentionList.classList.contains('visible')) return;
+      const items = mentionList.querySelectorAll('.mention-item');
+      if (!items.length) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        mentionSelectedIndex = Math.min(mentionSelectedIndex + 1, items.length - 1);
+        updateMentionSelection(items);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        mentionSelectedIndex = Math.max(mentionSelectedIndex - 1, 0);
+        updateMentionSelection(items);
+      } else if (e.key === 'Enter' || e.key === 'Tab') {
+        if (mentionActive && items.length) {
+          e.preventDefault();
+          selectMention(items[mentionSelectedIndex]);
+        }
+      } else if (e.key === 'Escape') {
+        mentionActive = false;
+        mentionList.classList.remove('visible');
+      }
+    });
+
+    function updateMentionSelection(items) {
+      items.forEach((el, i) => {
+        el.classList.toggle('selected', i === mentionSelectedIndex);
+      });
+    }
+
+    function selectMention(item) {
+      const file = item.getAttribute('data-file');
+      const val = inputEl.value;
+      const cursor = inputEl.selectionStart || 0;
+      const before = val.slice(0, cursor);
+      const after = val.slice(cursor);
+      const atIndex = before.lastIndexOf('@');
+      inputEl.value = before.slice(0, atIndex) + '@' + file + ' ' + after;
+      inputEl.selectionStart = inputEl.selectionEnd = atIndex + file.length + 2;
+      mentionActive = false;
+      mentionList.classList.remove('visible');
+      addContextPill(file, true);
+      // Tell extension to include this file
+      vscode.postMessage({ type: 'mentionFile', file: file });
+      inputEl.focus();
+    }
+
     // ---- Context pills ----
     function addContextPill(label, removable) {
       contextPillsEl.style.display = 'flex';
@@ -771,6 +892,26 @@ export function getChatHTML(
         }
         case 'context': {
           addContextPill(msg.label, true);
+          break;
+        }
+        case 'mentionResults': {
+          if (!mentionActive) break;
+          mentionList.innerHTML = '';
+          mentionSelectedIndex = 0;
+          if (msg.files && msg.files.length) {
+            msg.files.forEach((f, i) => {
+              const item = document.createElement('div');
+              item.className = 'mention-item' + (i === 0 ? ' selected' : '');
+              item.setAttribute('data-file', f.path);
+              const ext = f.path.split('.').pop() || '';
+              item.innerHTML = '<span class="icon">' + getFileIcon(ext) + '</span>' + f.name + '<span class="path">' + f.dir + '</span>';
+              item.onclick = () => selectMention(item);
+              mentionList.appendChild(item);
+            });
+            mentionList.classList.add('visible');
+          } else {
+            mentionList.classList.remove('visible');
+          }
           break;
         }
         case 'restoreHistory': {

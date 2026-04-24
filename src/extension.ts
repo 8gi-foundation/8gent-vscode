@@ -120,6 +120,12 @@ export async function activate(context: vscode.ExtensionContext) {
           case "applyCode":
             applyCodeToEditor(msg.code);
             break;
+          case "mentionQuery":
+            handleMentionQuery(msg.query, webviewView.webview);
+            break;
+          case "mentionFile":
+            mentionedFiles.add(msg.file);
+            break;
           case "switchProvider":
             vscode.commands.executeCommand("8gent.switchProvider");
             break;
@@ -257,6 +263,7 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 let extensionContext: vscode.ExtensionContext;
+let mentionedFiles = new Set<string>();
 
 async function saveHistory(): Promise<void> {
   // Keep last 50 messages
@@ -284,6 +291,33 @@ async function handleChat(
     ctx = gatherContext();
   }
 
+  // Include @mentioned files in context
+  if (mentionedFiles.size > 0 && ctx) {
+    const mentionContents: string[] = [];
+    for (const filePath of mentionedFiles) {
+      try {
+        const folders = vscode.workspace.workspaceFolders;
+        if (folders?.length) {
+          const uri = vscode.Uri.joinPath(folders[0].uri, filePath);
+          const content = await vscode.workspace.fs.readFile(uri);
+          const text = new TextDecoder().decode(content);
+          const lang = filePath.split(".").pop() || "";
+          mentionContents.push(`File: ${filePath}\n\`\`\`${lang}\n${text.slice(0, 5000)}\n\`\`\``);
+        }
+      } catch {
+        // File not found, skip
+      }
+    }
+    if (mentionContents.length) {
+      // Prepend mentioned files to the active file context
+      const mentionCtx = mentionContents.join("\n\n");
+      if (ctx.activeFile) {
+        ctx.activeFile.content = mentionCtx + "\n\n" + ctx.activeFile.content;
+      }
+    }
+    mentionedFiles.clear();
+  }
+
   try {
     const response = await currentProvider.chat(
       chatHistory,
@@ -308,6 +342,29 @@ async function handleChat(
     } else {
       webview.postMessage({ type: "error", text: msg });
     }
+  }
+}
+
+/** Search workspace files for @mention autocomplete */
+async function handleMentionQuery(query: string, webview: vscode.Webview): Promise<void> {
+  if (!query) {
+    webview.postMessage({ type: "mentionResults", files: [] });
+    return;
+  }
+
+  try {
+    const pattern = `**/*${query}*`;
+    const uris = await vscode.workspace.findFiles(pattern, "**/node_modules/**", 15);
+    const files = uris.map((uri) => {
+      const rel = vscode.workspace.asRelativePath(uri);
+      const parts = rel.split("/");
+      const name = parts.pop() || rel;
+      const dir = parts.join("/");
+      return { path: rel, name, dir };
+    });
+    webview.postMessage({ type: "mentionResults", files });
+  } catch {
+    webview.postMessage({ type: "mentionResults", files: [] });
   }
 }
 
