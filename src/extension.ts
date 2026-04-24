@@ -12,8 +12,15 @@ let chatHistory: ChatMessage[] = [];
 let chatPanel: vscode.WebviewView | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
+  extensionContext = context;
   const config = vscode.workspace.getConfiguration("8gent");
   currentProviderName = config.get("provider", "ollama") as ProviderName;
+
+  // Restore chat history from global state
+  const savedHistory = context.globalState.get<ChatMessage[]>("8gent.chatHistory");
+  if (savedHistory?.length) {
+    chatHistory = savedHistory;
+  }
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBar.command = "8gent.switchProvider";
@@ -91,6 +98,16 @@ export async function activate(context: vscode.ExtensionContext) {
         currentModelName
       );
 
+      // Replay saved chat history into webview
+      if (chatHistory.length > 0) {
+        setTimeout(() => {
+          webviewView.webview.postMessage({
+            type: "restoreHistory",
+            messages: chatHistory.map((m) => ({ role: m.role, content: m.content })),
+          });
+        }, 100);
+      }
+
       // Handle messages from webview
       webviewView.webview.onDidReceiveMessage(async (msg) => {
         switch (msg.type) {
@@ -99,6 +116,9 @@ export async function activate(context: vscode.ExtensionContext) {
             break;
           case "stop":
             currentProvider?.abort();
+            break;
+          case "applyCode":
+            applyCodeToEditor(msg.code);
             break;
           case "switchProvider":
             vscode.commands.executeCommand("8gent.switchProvider");
@@ -117,8 +137,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Commands
   context.subscriptions.push(
-    vscode.commands.registerCommand("8gent.newChat", () => {
+    vscode.commands.registerCommand("8gent.newChat", async () => {
       chatHistory = [];
+      await context.globalState.update("8gent.chatHistory", []);
       if (chatPanel) {
         chatPanel.webview.html = getChatHTML(
           chatPanel.webview,
@@ -188,6 +209,38 @@ export async function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  context.subscriptions.push(
+    vscode.commands.registerCommand("8gent.pickModel", async () => {
+      if (!(currentProvider instanceof OllamaProvider)) {
+        vscode.window.showInformationMessage("8gent: Model picker is only available for Ollama");
+        return;
+      }
+      const models = await currentProvider.listModels();
+      const chatModels = models.filter((m) => !m.includes("embed") && !m.includes("nomic"));
+      if (!chatModels.length) {
+        vscode.window.showWarningMessage("8gent: No chat models found in Ollama");
+        return;
+      }
+      const items = chatModels.map((m) => ({
+        label: m,
+        description: m === currentModelName ? "(active)" : undefined,
+      }));
+      const picked = await vscode.window.showQuickPick(items, { placeHolder: "Select Ollama model" });
+      if (!picked || picked.label === currentModelName) return;
+
+      // Update config and reinit
+      await vscode.workspace.getConfiguration("8gent").update("ollama.model", picked.label, vscode.ConfigurationTarget.Global);
+      await initProvider("ollama");
+
+      chatPanel?.webview.postMessage({
+        type: "providerChanged",
+        name: "ollama",
+        local: true,
+        model: currentModelName,
+      });
+    })
+  );
+
   // Watch for config changes
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
@@ -201,6 +254,14 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     })
   );
+}
+
+let extensionContext: vscode.ExtensionContext;
+
+async function saveHistory(): Promise<void> {
+  // Keep last 50 messages
+  const toSave = chatHistory.slice(-50);
+  await extensionContext.globalState.update("8gent.chatHistory", toSave);
 }
 
 async function handleChat(
@@ -235,6 +296,7 @@ async function handleChat(
     );
 
     chatHistory.push({ role: "assistant", content: response, timestamp: Date.now() });
+    await saveHistory();
     webview.postMessage({ type: "done" });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -247,6 +309,29 @@ async function handleChat(
       webview.postMessage({ type: "error", text: msg });
     }
   }
+}
+
+/** Insert code at cursor position in active editor */
+function applyCodeToEditor(code: string): void {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) {
+    vscode.window.showWarningMessage("8gent: No active editor to apply code to");
+    return;
+  }
+
+  editor.edit((editBuilder) => {
+    if (editor.selection.isEmpty) {
+      // Insert at cursor
+      editBuilder.insert(editor.selection.active, code);
+    } else {
+      // Replace selection
+      editBuilder.replace(editor.selection, code);
+    }
+  }).then((success) => {
+    if (success) {
+      vscode.window.showInformationMessage("8gent: Code applied to editor");
+    }
+  });
 }
 
 export function deactivate() {

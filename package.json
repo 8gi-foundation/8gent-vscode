@@ -61,6 +61,10 @@
       {
         "command": "8gent.switchProvider",
         "title": "8gent: Switch Provider"
+      },
+      {
+        "command": "8gent.pickModel",
+        "title": "8gent: Pick Model"
       }
     ],
     "configuration": {

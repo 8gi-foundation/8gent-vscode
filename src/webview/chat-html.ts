@@ -197,7 +197,30 @@ export function getChatHTML(
       font-size: 12px;
       line-height: 1.5;
       color: var(--vscode-editor-foreground);
+      tab-size: 2;
     }
+    /* Syntax highlighting using VS Code theme colors */
+    .tok-kw { color: var(--vscode-debugTokenExpression-name, #569cd6); }
+    .tok-str { color: var(--vscode-debugTokenExpression-string, #ce9178); }
+    .tok-num { color: var(--vscode-debugTokenExpression-number, #b5cea8); }
+    .tok-cm { color: var(--vscode-descriptionForeground); opacity: 0.7; font-style: italic; }
+    .tok-fn { color: var(--vscode-symbolIcon-functionForeground, #dcdcaa); }
+    .tok-ty { color: var(--vscode-symbolIcon-classForeground, #4ec9b0); }
+    .tok-op { color: var(--vscode-descriptionForeground); }
+    .tok-prop { color: var(--vscode-symbolIcon-propertyForeground, #9cdcfe); }
+    /* Apply button on code blocks */
+    .apply-btn {
+      border: none; background: none;
+      color: var(--vscode-descriptionForeground);
+      cursor: pointer; font-size: 10px;
+      padding: 2px 6px; border-radius: 3px;
+      margin-left: 4px;
+    }
+    .apply-btn:hover {
+      background: var(--vscode-toolbar-hoverBackground);
+      color: var(--vscode-foreground);
+    }
+    .apply-btn.applied { color: #1a7f37; }
     code.inline {
       font-family: var(--vscode-editor-font-family);
       font-size: 12px;
@@ -466,13 +489,45 @@ export function getChatHTML(
       }
     }
 
+    // ---- Syntax highlighting (lightweight, no deps) ----
+    const KEYWORDS = new Set(['const','let','var','function','return','if','else','for','while','do','switch','case','break','continue','new','class','extends','import','export','from','default','async','await','try','catch','finally','throw','typeof','instanceof','in','of','void','delete','this','super','yield','static','get','set','true','false','null','undefined','interface','type','enum','implements','abstract','public','private','protected','readonly','as','is','keyof','declare','module','namespace','require','def','self','elif','pass','lambda','with','raise','except','None','True','False','print','fn','pub','mut','impl','struct','trait','use','mod','crate','loop','match','where','ref','move','dyn','unsafe']);
+
+    function highlightCode(code, lang) {
+      const escaped = escapeHtml(code);
+      // Comments
+      let result = escaped
+        .replace(/(\/\/.*$)/gm, '<span class="tok-cm">$1</span>')
+        .replace(/(#.*$)/gm, '<span class="tok-cm">$1</span>')
+        .replace(/(\/\\*[\\s\\S]*?\\*\/)/g, '<span class="tok-cm">$1</span>');
+      // Strings (double, single, backtick)
+      result = result.replace(/(&quot;(?:[^&]|&(?!quot;))*?&quot;)/g, '<span class="tok-str">$1</span>');
+      result = result.replace(/('(?:[^'\\\\]|\\\\.)*?')/g, '<span class="tok-str">$1</span>');
+      result = result.replace(/(\`(?:[^\`\\\\]|\\\\.)*?\`)/g, '<span class="tok-str">$1</span>');
+      // Numbers
+      result = result.replace(/\\b(\\d+\\.?\\d*(?:e[+-]?\\d+)?)\\b/gi, '<span class="tok-num">$1</span>');
+      // Function calls
+      result = result.replace(/\\b([a-zA-Z_]\\w*)(?=\\s*\\()/g, (m, name) => {
+        if (KEYWORDS.has(name)) return m;
+        return '<span class="tok-fn">' + name + '</span>';
+      });
+      // Keywords
+      result = result.replace(/\\b([a-zA-Z_]+)\\b/g, (m, word) => {
+        if (KEYWORDS.has(word)) return '<span class="tok-kw">' + word + '</span>';
+        return m;
+      });
+      // Types (PascalCase)
+      result = result.replace(/\\b([A-Z][a-zA-Z0-9]+)\\b/g, '<span class="tok-ty">$1</span>');
+      return result;
+    }
+
     // ---- Markdown rendering ----
     function renderMarkdown(text) {
-      // Code blocks
+      // Code blocks with syntax highlighting
       text = text.replace(/\`\`\`(\\w*)?\\n([\\s\\S]*?)\`\`\`/g, (_, lang, code) => {
         const langLabel = lang || 'code';
-        const escaped = escapeHtml(code.trim());
-        return '<div class="code-block-wrap"><div class="code-block-header"><span class="lang">' + langLabel + '</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div><pre class="code-block"><code>' + escaped + '</code></pre></div>';
+        const highlighted = highlightCode(code.trim(), langLabel);
+        const id = 'cb-' + Math.random().toString(36).slice(2, 8);
+        return '<div class="code-block-wrap" id="' + id + '"><div class="code-block-header"><span class="lang">' + langLabel + '</span><span><button class="copy-btn" onclick="copyCode(this)">Copy</button><button class="apply-btn" onclick="applyCode(this)" title="Insert into editor">Apply</button></span></div><pre class="code-block"><code>' + highlighted + '</code></pre></div>';
       });
       // Inline code
       text = text.replace(/\`([^\`]+)\`/g, '<code class="inline">$1</code>');
@@ -484,14 +539,14 @@ export function getChatHTML(
       text = text.replace(/^### (.+)$/gm, '<h3>$1</h3>');
       text = text.replace(/^## (.+)$/gm, '<h2>$1</h2>');
       text = text.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-      // Lists
+      // Numbered lists
+      text = text.replace(/^\\d+\\. (.+)$/gm, '<li>$1</li>');
+      // Bullet lists
       text = text.replace(/^- (.+)$/gm, '<li>$1</li>');
       text = text.replace(/(<li>.*<\\/li>)/gs, '<ul>$1</ul>');
-      // Fix duplicate nested ul
       text = text.replace(/<\\/ul>\\s*<ul>/g, '');
-      // Paragraphs (double newline)
+      // Paragraphs
       text = text.replace(/\\n\\n/g, '</p><p>');
-      // Single newlines to <br> (but not inside pre/code)
       text = text.replace(/(?<!<\\/?[^>]+)\\n/g, '<br>');
       return '<p>' + text + '</p>';
     }
@@ -508,6 +563,15 @@ export function getChatHTML(
         btn.classList.add('copied');
         setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
       });
+    };
+
+    // ---- Apply code to editor ----
+    window.applyCode = function(btn) {
+      const code = btn.closest('.code-block-wrap').querySelector('code').textContent;
+      vscode.postMessage({ type: 'applyCode', code: code });
+      btn.textContent = 'Applied!';
+      btn.classList.add('applied');
+      setTimeout(() => { btn.textContent = 'Apply'; btn.classList.remove('applied'); }, 2000);
     };
 
     // ---- Messages ----
@@ -707,6 +771,23 @@ export function getChatHTML(
         }
         case 'context': {
           addContextPill(msg.label, true);
+          break;
+        }
+        case 'restoreHistory': {
+          // Replay saved messages
+          if (msg.messages && msg.messages.length) {
+            clearEmptyState();
+            for (const m of msg.messages) {
+              if (m.role === 'user') {
+                addMessage('user', m.content);
+              } else if (m.role === 'assistant') {
+                const el = addMessage('assistant', '', { html: true });
+                el.innerHTML = renderMarkdown(m.content);
+                el.setAttribute('data-raw', m.content);
+              }
+            }
+            scrollToBottom();
+          }
           break;
         }
         case 'providerChanged': {
