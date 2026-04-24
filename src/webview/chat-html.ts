@@ -373,6 +373,45 @@ export function getChatHTML(
       margin-top: 8px;
       line-height: 1.8;
     }
+    /* Quick action buttons */
+    .quick-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+      margin-top: 8px;
+      max-width: 280px;
+    }
+    .quick-btn {
+      font-size: 11px;
+      padding: 5px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--vscode-input-border);
+      background: var(--vscode-input-background);
+      color: var(--vscode-foreground);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .quick-btn:hover {
+      background: var(--vscode-list-hoverBackground);
+      border-color: var(--vscode-focusBorder);
+    }
+    /* Markdown tables */
+    .message.assistant table {
+      border-collapse: collapse;
+      margin: 6px 0;
+      font-size: 12px;
+      width: 100%;
+    }
+    .message.assistant th, .message.assistant td {
+      border: 1px solid var(--vscode-panel-border);
+      padding: 4px 8px;
+      text-align: left;
+    }
+    .message.assistant th {
+      background: var(--vscode-editorGroupHeader-tabsBackground);
+      font-weight: 600;
+    }
     .kbd {
       background: var(--vscode-keybindingLabel-background);
       border: 1px solid var(--vscode-keybindingLabel-border);
@@ -492,6 +531,7 @@ export function getChatHTML(
     </div>
     <div class="header-right">
       <button class="provider-badge ${providerLocal ? "local" : ""}" id="providerBtn" title="Click to switch provider">${providerName}${modelLabel}</button>
+      <button class="icon-btn" id="exportBtn" title="Export chat as Markdown">\u21E9</button>
       <button class="icon-btn" id="newChatBtn" title="New chat">+</button>
     </div>
   </div>
@@ -501,10 +541,20 @@ export function getChatHTML(
       <div class="empty-state">
         <div class="logo">8</div>
         <p>Ask anything about your code. Uses your local models - no API keys needed.</p>
+        <div class="quick-actions">
+          <button class="quick-btn" onclick="quickAction('Explain this code')">Explain code</button>
+          <button class="quick-btn" onclick="quickAction('Find bugs in this code')">Find bugs</button>
+          <button class="quick-btn" onclick="quickAction('Add tests for this code')">Add tests</button>
+          <button class="quick-btn" onclick="quickAction('Refactor this code for readability')">Refactor</button>
+          <button class="quick-btn" onclick="quickAction('Add TypeScript types to this code')">Add types</button>
+          <button class="quick-btn" onclick="quickAction('Add documentation comments to this code')">Add docs</button>
+        </div>
         <div class="shortcuts">
           <span class="kbd">Enter</span> send
-          <span class="kbd">Shift+Enter</span> newline<br>
+          <span class="kbd">Shift+Enter</span> newline
+          <span class="kbd">Cmd+L</span> focus<br>
           <span class="kbd">Cmd+Shift+8</span> send selection
+          <span class="kbd">@</span> mention file
         </div>
       </div>
     </div>
@@ -557,6 +607,27 @@ export function getChatHTML(
     // ---- Provider badge ----
     providerBtn.addEventListener('click', () => vscode.postMessage({ type: 'switchProvider' }));
     newChatBtn.addEventListener('click', () => vscode.postMessage({ type: 'newChat' }));
+    document.getElementById('exportBtn').addEventListener('click', () => {
+      // Build markdown from visible messages
+      const msgs = messagesEl.querySelectorAll('.msg-wrap');
+      if (!msgs.length || emptyState) return;
+      let md = '# 8gent Chat Export\\n\\n';
+      msgs.forEach(wrap => {
+        const msg = wrap.querySelector('.message');
+        if (!msg) return;
+        const raw = msg.getAttribute('data-raw') || msg.textContent;
+        if (wrap.classList.contains('user')) {
+          md += '## User\\n\\n' + raw + '\\n\\n';
+        } else {
+          md += '## Assistant\\n\\n' + raw + '\\n\\n';
+        }
+      });
+      navigator.clipboard.writeText(md).then(() => {
+        const btn = document.getElementById('exportBtn');
+        btn.textContent = '\\u2713';
+        setTimeout(() => { btn.textContent = '\\u21E9'; }, 1500);
+      });
+    });
 
     // ---- Helpers ----
     function clearEmptyState() {
@@ -653,6 +724,26 @@ export function getChatHTML(
       text = text.replace(/^- (.+)$/gm, '<li>$1</li>');
       text = text.replace(/(<li>.*<\\/li>)/gs, '<ul>$1</ul>');
       text = text.replace(/<\\/ul>\\s*<ul>/g, '');
+      // Tables (GFM-style)
+      text = text.replace(/((?:^\\|.+\\|\\s*$\\n?)+)/gm, (tableBlock) => {
+        const rows = tableBlock.trim().split('\\n').filter(r => r.trim());
+        if (rows.length < 2) return tableBlock;
+        // Check if second row is separator
+        const sepRow = rows[1];
+        if (!/^\\|[\\s:|-]+\\|$/.test(sepRow.trim())) return tableBlock;
+        let html = '<table>';
+        // Header
+        const headerCells = rows[0].split('|').filter(c => c.trim());
+        html += '<thead><tr>' + headerCells.map(c => '<th>' + c.trim() + '</th>').join('') + '</tr></thead>';
+        // Body
+        html += '<tbody>';
+        for (let i = 2; i < rows.length; i++) {
+          const cells = rows[i].split('|').filter(c => c.trim());
+          html += '<tr>' + cells.map(c => '<td>' + c.trim() + '</td>').join('') + '</tr>';
+        }
+        html += '</tbody></table>';
+        return html;
+      });
       // Paragraphs
       text = text.replace(/\\n\\n/g, '</p><p>');
       text = text.replace(/(?<!<\\/?[^>]+)\\n/g, '<br>');
@@ -664,6 +755,12 @@ export function getChatHTML(
     function escapeHtml(str) {
       return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
+
+    // ---- Quick actions ----
+    window.quickAction = function(prompt) {
+      inputEl.value = prompt;
+      send();
+    };
 
     // ---- Copy code ----
     window.copyCode = function(btn) {
