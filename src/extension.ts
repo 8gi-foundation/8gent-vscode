@@ -1,11 +1,13 @@
 import * as vscode from "vscode";
 import type { ChatMessage, Provider, WorkspaceContext } from "./types";
 import { createProvider, detectProviders, pickProvider, type ProviderName, PROVIDER_LABELS } from "./providers";
+import { OllamaProvider } from "./providers/ollama";
 import { gatherContext } from "./context";
 import { getChatHTML } from "./webview/chat-html";
 
 let currentProvider: Provider | null = null;
 let currentProviderName: ProviderName = "ollama";
+let currentModelName: string | undefined;
 let chatHistory: ChatMessage[] = [];
 let chatPanel: vscode.WebviewView | undefined;
 
@@ -13,7 +15,6 @@ export async function activate(context: vscode.ExtensionContext) {
   const config = vscode.workspace.getConfiguration("8gent");
   currentProviderName = config.get("provider", "ollama") as ProviderName;
 
-  // Auto-detect local providers on startup
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBar.command = "8gent.switchProvider";
   statusBar.tooltip = "8gent - click to switch provider";
@@ -22,6 +23,7 @@ export async function activate(context: vscode.ExtensionContext) {
   async function initProvider(name: ProviderName) {
     currentProviderName = name;
     currentProvider = createProvider(name);
+    currentModelName = undefined;
 
     // Load vessel auth if needed
     if (name === "vessel" && "loadAuth" in currentProvider) {
@@ -31,10 +33,17 @@ export async function activate(context: vscode.ExtensionContext) {
     }
 
     const healthy = await currentProvider.healthCheck();
-    const label = PROVIDER_LABELS[name] || name;
+
+    // Resolve model name for display
+    if (healthy && currentProvider instanceof OllamaProvider) {
+      const models = await currentProvider.listModels();
+      const chatModels = models.filter((m) => !m.includes("embed") && !m.includes("nomic"));
+      currentModelName = chatModels[0] || models[0];
+    }
 
     if (healthy) {
-      statusBar.text = `$(hubot) 8gent: ${name}`;
+      const display = currentModelName ? `${name}: ${currentModelName}` : name;
+      statusBar.text = `$(hubot) 8gent: ${display}`;
       statusBar.backgroundColor = undefined;
     } else {
       statusBar.text = `$(warning) 8gent: ${name} (offline)`;
@@ -45,17 +54,15 @@ export async function activate(context: vscode.ExtensionContext) {
     return healthy;
   }
 
-  // Try configured provider first, then auto-detect
+  // Try configured provider, then auto-detect
   let healthy = await initProvider(currentProviderName);
-  if (!healthy && currentProviderName !== "ollama") {
-    // Fallback to auto-detect
+  if (!healthy) {
     const available = await detectProviders();
     if (available.length > 0) {
-      healthy = await initProvider(available[0]);
+      const fallback = available[0];
+      healthy = await initProvider(fallback);
       if (healthy) {
-        vscode.window.showInformationMessage(
-          `8gent: ${currentProviderName} unavailable, using ${available[0]}`
-        );
+        vscode.window.showInformationMessage(`8gent: using ${fallback} (auto-detected)`);
       }
     }
   }
@@ -80,13 +87,25 @@ export async function activate(context: vscode.ExtensionContext) {
         webviewView.webview,
         context.extensionUri,
         currentProviderName,
-        currentProvider?.isLocal ?? true
+        currentProvider?.isLocal ?? true,
+        currentModelName
       );
 
       // Handle messages from webview
       webviewView.webview.onDidReceiveMessage(async (msg) => {
-        if (msg.type === "chat") {
-          await handleChat(msg.text, webviewView.webview, config.get("contextInjection", true));
+        switch (msg.type) {
+          case "chat":
+            await handleChat(msg.text, webviewView.webview, config.get("contextInjection", true));
+            break;
+          case "stop":
+            currentProvider?.abort();
+            break;
+          case "switchProvider":
+            vscode.commands.executeCommand("8gent.switchProvider");
+            break;
+          case "newChat":
+            vscode.commands.executeCommand("8gent.newChat");
+            break;
         }
       });
     },
@@ -105,7 +124,8 @@ export async function activate(context: vscode.ExtensionContext) {
           chatPanel.webview,
           context.extensionUri,
           currentProviderName,
-          currentProvider?.isLocal ?? true
+          currentProvider?.isLocal ?? true,
+          currentModelName
         );
       }
     })
@@ -120,11 +140,13 @@ export async function activate(context: vscode.ExtensionContext) {
       }
       const text = editor.document.getText(editor.selection);
       const relPath = vscode.workspace.asRelativePath(editor.document.uri);
-      const prompt = `Regarding this code from ${relPath}:\n\`\`\`\n${text}\n\`\`\`\n`;
+      const lang = editor.document.languageId;
+      const startLine = editor.selection.start.line + 1;
+      const endLine = editor.selection.end.line + 1;
+      const prompt = `Regarding this code from ${relPath} (lines ${startLine}-${endLine}):\n\`\`\`${lang}\n${text}\n\`\`\`\n`;
 
-      // Focus the chat panel and inject text
       vscode.commands.executeCommand("8gent.chat.focus");
-      chatPanel?.webview.postMessage({ type: "inject", text: prompt });
+      chatPanel?.webview.postMessage({ type: "inject", text: prompt, file: relPath });
     })
   );
 
@@ -133,6 +155,12 @@ export async function activate(context: vscode.ExtensionContext) {
       const healthy = await initProvider(currentProviderName);
       if (healthy) {
         vscode.window.showInformationMessage(`8gent: Connected to ${currentProviderName}`);
+        chatPanel?.webview.postMessage({
+          type: "providerChanged",
+          name: currentProviderName,
+          local: currentProvider?.isLocal ?? true,
+          model: currentModelName,
+        });
       } else {
         vscode.window.showWarningMessage(`8gent: ${currentProviderName} is not reachable`);
       }
@@ -149,14 +177,13 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.showWarningMessage(`8gent: ${picked} is not reachable. Switching anyway.`);
       }
 
-      // Update settings
       await config.update("provider", picked, vscode.ConfigurationTarget.Global);
 
-      // Notify webview
       chatPanel?.webview.postMessage({
         type: "providerChanged",
         name: picked,
         local: currentProvider?.isLocal ?? true,
+        model: currentModelName,
       });
     })
   );
@@ -182,23 +209,24 @@ async function handleChat(
   injectContext: boolean
 ): Promise<void> {
   if (!currentProvider) {
-    webview.postMessage({ type: "error", text: "No provider connected. Run '8gent: Reconnect'." });
+    webview.postMessage({
+      type: "error",
+      text: "No provider connected. Click the provider badge to switch, or run '8gent: Reconnect'.",
+    });
     return;
   }
 
-  // Add user message to history
   chatHistory.push({ role: "user", content: text, timestamp: Date.now() });
 
-  // Gather workspace context
-  let context: WorkspaceContext | undefined;
+  let ctx: WorkspaceContext | undefined;
   if (injectContext) {
-    context = gatherContext();
+    ctx = gatherContext();
   }
 
   try {
     const response = await currentProvider.chat(
       chatHistory,
-      context,
+      ctx,
       (chunk) => {
         if (chunk.text) {
           webview.postMessage({ type: "stream", text: chunk.text });
@@ -206,17 +234,17 @@ async function handleChat(
       }
     );
 
-    // Add assistant response to history
     chatHistory.push({ role: "assistant", content: response, timestamp: Date.now() });
     webview.postMessage({ type: "done" });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    // Remove the failed user message from history
+    chatHistory.pop();
 
-    // Don't add failed responses to history
     if (msg.includes("aborted")) {
       webview.postMessage({ type: "error", text: "Request cancelled" });
     } else {
-      webview.postMessage({ type: "error", text: `Error: ${msg}` });
+      webview.postMessage({ type: "error", text: msg });
     }
   }
 }

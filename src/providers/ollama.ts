@@ -7,6 +7,7 @@ export class OllamaProvider implements Provider {
 
   private endpoint: string;
   private model: string;
+  private resolvedModel: string | null = null;
   private controller: AbortController | null = null;
 
   constructor(endpoint: string, model: string) {
@@ -19,10 +20,42 @@ export class OllamaProvider implements Provider {
       const res = await fetch(`${this.endpoint}/api/tags`, {
         signal: AbortSignal.timeout(3000),
       });
-      return res.ok;
+      if (!res.ok) return false;
+      // Cache available models for auto-detect
+      const data = await res.json() as { models?: { name: string }[] };
+      if (data.models?.length) {
+        this.resolvedModel = this.pickModel(data.models.map((m) => m.name));
+      }
+      return true;
     } catch {
       return false;
     }
+  }
+
+  /** List available Ollama models */
+  async listModels(): Promise<string[]> {
+    try {
+      const res = await fetch(`${this.endpoint}/api/tags`, {
+        signal: AbortSignal.timeout(3000),
+      });
+      if (!res.ok) return [];
+      const data = await res.json() as { models?: { name: string }[] };
+      return (data.models || []).map((m) => m.name);
+    } catch {
+      return [];
+    }
+  }
+
+  /** Pick best model from what's available */
+  private pickModel(available: string[]): string {
+    // If configured model exists, use it
+    if (this.model && available.some((m) => m === this.model || m.startsWith(this.model))) {
+      return available.find((m) => m === this.model || m.startsWith(this.model))!;
+    }
+    // Prefer coding models, then general, skip embedding models
+    const chatModels = available.filter((m) => !m.includes("embed") && !m.includes("nomic"));
+    if (chatModels.length) return chatModels[0];
+    return available[0];
   }
 
   async chat(
@@ -31,6 +64,16 @@ export class OllamaProvider implements Provider {
     onChunk?: (chunk: StreamChunk) => void
   ): Promise<string> {
     this.controller = new AbortController();
+
+    // Auto-detect model if we haven't resolved one yet
+    const model = this.resolvedModel || this.model;
+    if (!model) {
+      const models = await this.listModels();
+      if (!models.length) throw new Error("No Ollama models found. Run: ollama pull qwen3:8b");
+      this.resolvedModel = this.pickModel(models);
+    }
+
+    const useModel = this.resolvedModel || this.model;
 
     const systemContext = context ? buildContextMessage(context) : undefined;
     const ollamaMessages = [
@@ -42,7 +85,7 @@ export class OllamaProvider implements Provider {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: this.model,
+        model: useModel,
         messages: ollamaMessages,
         stream: true,
       }),
@@ -50,6 +93,10 @@ export class OllamaProvider implements Provider {
     });
 
     if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      if (body.includes("not found")) {
+        throw new Error(`Model '${useModel}' not found. Available models: ${(await this.listModels()).join(", ")}`);
+      }
       throw new Error(`Ollama error: ${res.status} ${res.statusText}`);
     }
 
