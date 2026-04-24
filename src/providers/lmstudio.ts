@@ -1,4 +1,5 @@
 import type { Provider, ChatMessage, WorkspaceContext, StreamChunk } from "../types";
+import { buildSystemPrompt } from "../system-prompt";
 
 /** LM Studio provider - OpenAI-compatible local API */
 export class LMStudioProvider implements Provider {
@@ -32,9 +33,9 @@ export class LMStudioProvider implements Provider {
   ): Promise<string> {
     this.controller = new AbortController();
 
-    const systemMsg = context ? buildContextMessage(context) : undefined;
+    const systemMsg = buildSystemPrompt(context);
     const apiMessages = [
-      ...(systemMsg ? [{ role: "system" as const, content: systemMsg }] : []),
+      { role: "system" as const, content: systemMsg },
       ...messages.map((m) => ({ role: m.role, content: m.content })),
     ];
 
@@ -105,18 +106,4 @@ async function streamSSE(
   return full;
 }
 
-function buildContextMessage(ctx: WorkspaceContext): string {
-  const parts: string[] = [];
-  if (ctx.workspaceRoot) parts.push(`Workspace: ${ctx.workspaceRoot}`);
-  if (ctx.activeFile) {
-    parts.push(`Current file: ${ctx.activeFile.path} (${ctx.activeFile.language})`);
-    if (ctx.selection) {
-      parts.push(`Selected (lines ${ctx.selection.startLine}-${ctx.selection.endLine}):\n\`\`\`\n${ctx.selection.text}\n\`\`\``);
-    } else {
-      const lines = ctx.activeFile.content.split("\n").slice(0, 200).join("\n");
-      parts.push(`File content:\n\`\`\`${ctx.activeFile.language}\n${lines}\n\`\`\``);
-    }
-  }
-  if (ctx.openFiles?.length) parts.push(`Open files: ${ctx.openFiles.join(", ")}`);
-  return parts.join("\n\n");
-}
+// System prompt builder moved to ../system-prompt.ts

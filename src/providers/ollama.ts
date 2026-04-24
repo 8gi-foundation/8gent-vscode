@@ -1,4 +1,5 @@
 import type { Provider, ChatMessage, WorkspaceContext, StreamChunk } from "../types";
+import { buildSystemPrompt } from "../system-prompt";
 
 /** Ollama provider - local model inference via Ollama API */
 export class OllamaProvider implements Provider {
@@ -75,9 +76,9 @@ export class OllamaProvider implements Provider {
 
     const useModel = this.resolvedModel || this.model;
 
-    const systemContext = context ? buildContextMessage(context) : undefined;
+    const systemContext = buildSystemPrompt(context);
     const ollamaMessages = [
-      ...(systemContext ? [{ role: "system" as const, content: systemContext }] : []),
+      { role: "system" as const, content: systemContext },
       ...messages.map((m) => ({ role: m.role, content: m.content })),
     ];
 
@@ -145,30 +146,4 @@ async function streamNDJSON(
   return full;
 }
 
-function buildContextMessage(ctx: WorkspaceContext): string {
-  const parts: string[] = [];
-
-  if (ctx.workspaceRoot) {
-    parts.push(`Workspace: ${ctx.workspaceRoot}`);
-  }
-
-  if (ctx.activeFile) {
-    parts.push(`Current file: ${ctx.activeFile.path} (${ctx.activeFile.language})`);
-    if (ctx.selection) {
-      parts.push(
-        `Selected text (lines ${ctx.selection.startLine}-${ctx.selection.endLine}):\n\`\`\`\n${ctx.selection.text}\n\`\`\``
-      );
-    } else {
-      // Send first 200 lines to avoid overwhelming small models
-      const lines = ctx.activeFile.content.split("\n");
-      const truncated = lines.slice(0, 200).join("\n");
-      parts.push(`File content:\n\`\`\`${ctx.activeFile.language}\n${truncated}\n\`\`\``);
-    }
-  }
-
-  if (ctx.openFiles?.length) {
-    parts.push(`Open files: ${ctx.openFiles.join(", ")}`);
-  }
-
-  return parts.join("\n\n");
-}
+// System prompt builder moved to ../system-prompt.ts
