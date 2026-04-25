@@ -355,9 +355,24 @@ async function handleChat(
     mentionedFiles.clear();
   }
 
+  // Trim conversation to fit context window (rough estimate: ~4 chars per token)
+  // Keep system + last N messages to stay within ~6k tokens for the conversation
+  const maxConversationChars = 24000; // ~6k tokens
+  let trimmedHistory = [...chatHistory];
+  let totalChars = trimmedHistory.reduce((sum, m) => sum + m.content.length, 0);
+  const originalLen = trimmedHistory.length;
+  while (totalChars > maxConversationChars && trimmedHistory.length > 2) {
+    const removed = trimmedHistory.shift();
+    if (removed) totalChars -= removed.content.length;
+  }
+  if (trimmedHistory.length < originalLen) {
+    const dropped = originalLen - trimmedHistory.length;
+    webview.postMessage({ type: "tool", text: `Context trimmed: ${dropped} older messages omitted to fit model context window` });
+  }
+
   try {
     const response = await currentProvider.chat(
-      chatHistory,
+      trimmedHistory,
       ctx,
       (chunk) => {
         if (chunk.text) {
