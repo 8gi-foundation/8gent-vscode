@@ -549,18 +549,18 @@ export function getChatHTML(
     </div>
   </div>
 
-  <div style="position: relative; flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+  <div style="position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;">
     <div id="messages" class="messages">
       <div class="empty-state">
         <div class="logo">8</div>
         <p>Ask anything about your code. Uses your local models - no API keys needed.</p>
-        <div class="quick-actions">
-          <button class="quick-btn" onclick="quickAction('Explain this code')">Explain code</button>
-          <button class="quick-btn" onclick="quickAction('Find bugs in this code')">Find bugs</button>
-          <button class="quick-btn" onclick="quickAction('Add tests for this code')">Add tests</button>
-          <button class="quick-btn" onclick="quickAction('Refactor this code for readability')">Refactor</button>
-          <button class="quick-btn" onclick="quickAction('Add TypeScript types to this code')">Add types</button>
-          <button class="quick-btn" onclick="quickAction('Add documentation comments to this code')">Add docs</button>
+        <div class="quick-actions" id="quickActions">
+          <button class="quick-btn" data-prompt="Explain this code">Explain code</button>
+          <button class="quick-btn" data-prompt="Find bugs in this code">Find bugs</button>
+          <button class="quick-btn" data-prompt="Add tests for this code">Add tests</button>
+          <button class="quick-btn" data-prompt="Refactor this code for readability">Refactor</button>
+          <button class="quick-btn" data-prompt="Add TypeScript types to this code">Add types</button>
+          <button class="quick-btn" data-prompt="Add documentation comments to this code">Add docs</button>
         </div>
         <div class="shortcuts">
           <span class="kbd">Enter</span> send
@@ -711,7 +711,7 @@ export function getChatHTML(
       text = text.replace(/<think>([\\s\\S]*?)<\\/think>/g, (_, content) => {
         const id = 'think-' + Math.random().toString(36).slice(2, 8);
         const rendered = content.trim().replace(/\\n/g, '<br>');
-        return '<div class="think-block collapsed" id="' + id + '"><div class="think-header" onclick="this.parentElement.classList.toggle(\'collapsed\')"><span class="think-chevron">\\u25BC</span> Reasoning</div><div class="think-body">' + rendered + '</div></div>';
+        return '<div class="think-block collapsed" id="' + id + '"><div class="think-header" data-action="toggle-think"><span class="think-chevron">\\u25BC</span> Reasoning</div><div class="think-body">' + rendered + '</div></div>';
       });
       // Handle unclosed <think> during streaming (model still thinking)
       if (isStreaming && text.includes('<think>') && !text.includes('</think>')) {
@@ -726,7 +726,7 @@ export function getChatHTML(
         const langLabel = lang || 'code';
         const highlighted = highlightCode(code.trim(), langLabel);
         const id = 'cb-' + Math.random().toString(36).slice(2, 8);
-        return '<div class="code-block-wrap" id="' + id + '"><div class="code-block-header"><span class="lang">' + langLabel + '</span><span><button class="copy-btn" onclick="copyCode(this)">Copy</button><button class="diff-btn" onclick="diffCode(this)" title="Preview diff">Diff</button><button class="apply-btn" onclick="applyCode(this)" title="Insert into editor">Apply</button></span></div><pre class="code-block"><code>' + highlighted + '</code></pre></div>';
+        return '<div class="code-block-wrap" id="' + id + '"><div class="code-block-header"><span class="lang">' + langLabel + '</span><span><button class="copy-btn" data-action="copy">Copy</button><button class="diff-btn" data-action="diff" title="Preview diff">Diff</button><button class="apply-btn" data-action="apply" title="Insert into editor">Apply</button></span></div><pre class="code-block"><code>' + highlighted + '</code></pre></div>';
       });
       // Handle unclosed code blocks during streaming
       if (isStreaming) {
@@ -795,36 +795,59 @@ export function getChatHTML(
       return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
-    // ---- Quick actions ----
-    window.quickAction = function(prompt) {
-      inputEl.value = prompt;
-      send();
-    };
+    // ---- Quick actions (event delegation, CSP-safe) ----
+    document.getElementById('quickActions')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('.quick-btn');
+      if (!btn) return;
+      const prompt = btn.getAttribute('data-prompt');
+      if (prompt) {
+        inputEl.value = prompt;
+        send();
+      }
+    });
 
-    // ---- Copy code ----
-    window.copyCode = function(btn) {
-      const code = btn.closest('.code-block-wrap').querySelector('code').textContent;
-      navigator.clipboard.writeText(code).then(() => {
-        btn.textContent = 'Copied!';
-        btn.classList.add('copied');
-        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
-      });
-    };
+    // ---- Global event delegation (CSP-safe, no inline onclick) ----
+    document.addEventListener('click', (e) => {
+      const target = e.target;
+      const action = target.getAttribute('data-action') || target.closest('[data-action]')?.getAttribute('data-action');
+      if (!action) return;
+      const btn = target.closest('[data-action]') || target;
 
-    // ---- Apply code to editor ----
-    window.applyCode = function(btn) {
-      const code = btn.closest('.code-block-wrap').querySelector('code').textContent;
-      vscode.postMessage({ type: 'applyCode', code: code });
-      btn.textContent = 'Applied!';
-      btn.classList.add('applied');
-      setTimeout(() => { btn.textContent = 'Apply'; btn.classList.remove('applied'); }, 2000);
-    };
-
-    // ---- Diff preview ----
-    window.diffCode = function(btn) {
-      const code = btn.closest('.code-block-wrap').querySelector('code').textContent;
-      vscode.postMessage({ type: 'diffCode', code: code });
-    };
+      switch (action) {
+        case 'copy': {
+          const code = btn.closest('.code-block-wrap').querySelector('code').textContent;
+          navigator.clipboard.writeText(code).then(() => {
+            btn.textContent = 'Copied!';
+            btn.classList.add('copied');
+            setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+          });
+          break;
+        }
+        case 'apply': {
+          const code = btn.closest('.code-block-wrap').querySelector('code').textContent;
+          vscode.postMessage({ type: 'applyCode', code: code });
+          btn.textContent = 'Applied!';
+          btn.classList.add('applied');
+          setTimeout(() => { btn.textContent = 'Apply'; btn.classList.remove('applied'); }, 2000);
+          break;
+        }
+        case 'diff': {
+          const code = btn.closest('.code-block-wrap').querySelector('code').textContent;
+          vscode.postMessage({ type: 'diffCode', code: code });
+          break;
+        }
+        case 'toggle-think': {
+          const block = btn.closest('.think-block');
+          if (block) block.classList.toggle('collapsed');
+          break;
+        }
+        case 'remove-pill': {
+          const pill = btn.closest('.context-pill');
+          if (pill) { pill.remove(); updatePillVisibility(); }
+          break;
+        }
+      }
+    });
 
     // ---- Messages ----
     function addMessage(role, text, opts) {
@@ -1128,16 +1151,16 @@ export function getChatHTML(
       contextPillsEl.style.display = 'flex';
       const pill = document.createElement('div');
       pill.className = 'context-pill';
-      pill.innerHTML = label + (removable ? ' <span class="remove" onclick="this.parentElement.remove(); updatePillVisibility();">x</span>' : '');
+      pill.innerHTML = label + (removable ? ' <span class="remove" data-action="remove-pill">x</span>' : '');
       contextPillsEl.appendChild(pill);
     }
     function clearContextPills() {
       contextPillsEl.innerHTML = '';
       contextPillsEl.style.display = 'none';
     }
-    window.updatePillVisibility = function() {
+    function updatePillVisibility() {
       if (!contextPillsEl.children.length) contextPillsEl.style.display = 'none';
-    };
+    }
 
     // ---- Slash commands ----
     const SLASH_COMMANDS = [
