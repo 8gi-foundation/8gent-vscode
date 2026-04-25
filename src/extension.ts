@@ -11,17 +11,28 @@ let currentProviderName: ProviderName = "ollama";
 let currentModelName: string | undefined;
 let chatHistory: ChatMessage[] = [];
 let chatPanel: vscode.WebviewView | undefined;
+let currentRole = "orchestrator";
+
+// Per-role chat histories
+const roleHistories: Record<string, ChatMessage[]> = {
+  orchestrator: [],
+  engineer: [],
+  qa: [],
+};
 
 export async function activate(context: vscode.ExtensionContext) {
   extensionContext = context;
   const config = vscode.workspace.getConfiguration("8gent");
   currentProviderName = config.get("provider", "ollama") as ProviderName;
 
-  // Restore chat history from global state
-  const savedHistory = context.globalState.get<ChatMessage[]>("8gent.chatHistory");
-  if (savedHistory?.length) {
-    chatHistory = savedHistory;
+  // Restore per-role chat histories from global state
+  for (const role of ["orchestrator", "engineer", "qa"]) {
+    const saved = context.globalState.get<ChatMessage[]>(`8gent.chatHistory.${role}`);
+    if (saved?.length) {
+      roleHistories[role] = saved;
+    }
   }
+  chatHistory = roleHistories[currentRole];
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBar.command = "8gent.switchProvider";
@@ -151,6 +162,11 @@ export async function activate(context: vscode.ExtensionContext) {
               chatHistory = chatHistory.slice(0, msg.index);
               saveHistory();
             }
+            break;
+          case "roleChanged":
+            // Switch to a different role's thread
+            currentRole = msg.role || "orchestrator";
+            chatHistory = roleHistories[currentRole];
             break;
           case "switchProvider":
             vscode.commands.executeCommand("8gent.switchProvider");
@@ -303,9 +319,10 @@ let extensionContext: vscode.ExtensionContext;
 let mentionedFiles = new Set<string>();
 
 async function saveHistory(): Promise<void> {
-  // Keep last 50 messages
+  // Keep last 50 messages per role
   const toSave = chatHistory.slice(-50);
-  await extensionContext.globalState.update("8gent.chatHistory", toSave);
+  roleHistories[currentRole] = toSave;
+  await extensionContext.globalState.update(`8gent.chatHistory.${currentRole}`, toSave);
 }
 
 async function handleChat(

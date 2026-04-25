@@ -20,32 +20,27 @@ export function getChatHTML(
   <style nonce="${nonce}">
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
-
-    body {
+    html, body {
+      margin: 0; padding: 0;
+      width: 100%; height: 100%;
+      overflow: hidden;
       font-family: var(--vscode-font-family);
       font-size: var(--vscode-font-size);
       color: var(--vscode-foreground);
       background: var(--vscode-sideBar-background);
     }
 
-    #app {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
     /* ---- Header ---- */
     .header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 20;
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 6px 10px;
       border-bottom: 1px solid var(--vscode-panel-border);
       background: var(--vscode-sideBarSectionHeader-background);
-      flex-shrink: 0;
     }
     .header-left { display: flex; align-items: center; gap: 6px; }
     .header-title {
@@ -81,10 +76,12 @@ export function getChatHTML(
 
     /* ---- Role tabs ---- */
     .role-tabs {
+      position: fixed;
+      left: 0; right: 0;
+      z-index: 20;
       display: flex;
       border-bottom: 1px solid var(--vscode-panel-border);
       background: var(--vscode-sideBar-background);
-      flex-shrink: 0;
       padding: 0 6px;
       gap: 2px;
     }
@@ -124,14 +121,11 @@ export function getChatHTML(
 
     /* ---- Messages ---- */
     .messages {
-      flex: 1 1 0;
-      min-height: 0;
       overflow-y: auto;
       padding: 12px;
       display: flex;
       flex-direction: column;
       gap: 8px;
-      scroll-behavior: smooth;
     }
     .messages::-webkit-scrollbar { width: 6px; }
     .messages::-webkit-scrollbar-thumb {
@@ -141,8 +135,8 @@ export function getChatHTML(
 
     /* Scroll-to-bottom */
     .scroll-bottom {
-      position: absolute;
-      bottom: 80px;
+      position: fixed;
+      bottom: 70px;
       left: 50%;
       transform: translateX(-50%);
       background: var(--vscode-button-background);
@@ -480,10 +474,12 @@ export function getChatHTML(
 
     /* ---- Input area ---- */
     .input-area {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      z-index: 20;
       padding: 8px 10px;
       border-top: 1px solid var(--vscode-panel-border);
       background: var(--vscode-sideBar-background);
-      flex-shrink: 0;
     }
     .input-wrap {
       display: flex;
@@ -587,8 +583,7 @@ export function getChatHTML(
   </style>
 </head>
 <body>
-<div id="app">
-  <div class="header">
+  <div class="header" id="header">
     <div class="header-left">
       <span class="header-title">8gent</span>
     </div>
@@ -606,32 +601,30 @@ export function getChatHTML(
     <button class="role-tab" data-role="qa"><span class="role-dot qa"></span>QA</button>
   </div>
 
-  <div style="position: relative; flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden;">
-    <div id="messages" class="messages">
-      <div class="empty-state">
-        <div class="logo">8</div>
-        <p>Ask anything about your code. Uses your local models - no API keys needed.</p>
-        <div class="quick-actions" id="quickActions">
-          <button class="quick-btn" data-prompt="Explain this code">Explain code</button>
-          <button class="quick-btn" data-prompt="Find bugs in this code">Find bugs</button>
-          <button class="quick-btn" data-prompt="Add tests for this code">Add tests</button>
-          <button class="quick-btn" data-prompt="Refactor this code for readability">Refactor</button>
-          <button class="quick-btn" data-prompt="Add TypeScript types to this code">Add types</button>
-          <button class="quick-btn" data-prompt="Add documentation comments to this code">Add docs</button>
-        </div>
-        <div class="shortcuts">
-          <span class="kbd">Enter</span> send
-          <span class="kbd">Shift+Enter</span> newline
-          <span class="kbd">Cmd+L</span> focus<br>
-          <span class="kbd">Cmd+Shift+8</span> send selection
-          <span class="kbd">@</span> mention file
-        </div>
+  <div id="messages" class="messages">
+    <div class="empty-state">
+      <div class="logo">8</div>
+      <p>Ask anything about your code. Uses your local models - no API keys needed.</p>
+      <div class="quick-actions" id="quickActions">
+        <button class="quick-btn" data-prompt="Explain this code">Explain code</button>
+        <button class="quick-btn" data-prompt="Find bugs in this code">Find bugs</button>
+        <button class="quick-btn" data-prompt="Add tests for this code">Add tests</button>
+        <button class="quick-btn" data-prompt="Refactor this code for readability">Refactor</button>
+        <button class="quick-btn" data-prompt="Add TypeScript types to this code">Add types</button>
+        <button class="quick-btn" data-prompt="Add documentation comments to this code">Add docs</button>
+      </div>
+      <div class="shortcuts">
+        <span class="kbd">Enter</span> send
+        <span class="kbd">Shift+Enter</span> newline
+        <span class="kbd">Cmd+L</span> focus<br>
+        <span class="kbd">Cmd+Shift+8</span> send selection
+        <span class="kbd">@</span> mention file
       </div>
     </div>
-    <button class="scroll-bottom" id="scrollBottom">Scroll to bottom</button>
   </div>
+  <button class="scroll-bottom" id="scrollBottom">Scroll to bottom</button>
 
-  <div class="input-area">
+  <div class="input-area" id="inputArea">
     <div id="contextPills" class="context-pills" style="display:none;"></div>
     <div style="position: relative;">
       <div class="mention-list" id="mentionList"></div>
@@ -648,7 +641,6 @@ export function getChatHTML(
       <span id="msgCount"></span>
     </div>
   </div>
-</div>
 
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
@@ -671,29 +663,68 @@ export function getChatHTML(
     let userScrolledAway = false;
     let activeRole = 'orchestrator';
 
-    // ---- Role tabs ----
-    const roleDescriptions = {
-      orchestrator: 'You are the orchestrator. You plan, delegate, and coordinate. Break complex tasks into sub-tasks. Think about architecture and approach before diving into code.',
-      engineer: 'You are the engineer. You write clean, efficient, production-ready code. Focus on implementation, best practices, and getting things done.',
-      qa: 'You are the QA engineer. You review code for bugs, edge cases, security issues, and test coverage. Be thorough and critical.'
+    // ---- Layout: JS-based height calculation ----
+    const headerEl = document.getElementById('header');
+    const roleTabsEl = document.getElementById('roleTabs');
+    const inputAreaEl = document.getElementById('inputArea');
+
+    function recalcLayout() {
+      const hH = headerEl.offsetHeight;
+      const tH = roleTabsEl.offsetHeight;
+      const iH = inputAreaEl.offsetHeight;
+      roleTabsEl.style.top = hH + 'px';
+      messagesEl.style.position = 'fixed';
+      messagesEl.style.top = (hH + tH) + 'px';
+      messagesEl.style.left = '0';
+      messagesEl.style.right = '0';
+      messagesEl.style.bottom = iH + 'px';
+    }
+    recalcLayout();
+    window.addEventListener('resize', recalcLayout);
+    // Recalc when textarea grows
+    new MutationObserver(recalcLayout).observe(inputAreaEl, { childList: true, subtree: true, attributes: true });
+
+    // ---- Per-role thread state ----
+    const threads = {
+      orchestrator: { html: '', messages: [], rawText: '' },
+      engineer: { html: '', messages: [], rawText: '' },
+      qa: { html: '', messages: [], rawText: '' },
     };
 
+    function emptyStateHTML() {
+      return '<div class="empty-state"><div class="logo">8</div><p>Ask anything about your code.</p><div class="quick-actions" id="quickActions"><button class="quick-btn" data-prompt="Explain this code">Explain code</button><button class="quick-btn" data-prompt="Find bugs in this code">Find bugs</button><button class="quick-btn" data-prompt="Add tests for this code">Add tests</button></div></div>';
+    }
+
+    // ---- Role tabs ----
     document.getElementById('roleTabs').addEventListener('click', (e) => {
       const tab = e.target.closest('.role-tab');
       if (!tab || streaming) return;
       const role = tab.dataset.role;
       if (role === activeRole) return;
 
+      // Save current thread
+      threads[activeRole].html = messagesEl.innerHTML;
+
       // Switch active tab
       document.querySelectorAll('.role-tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
+
+      // Restore target thread
       activeRole = role;
+      const thread = threads[role];
+      if (thread.html) {
+        messagesEl.innerHTML = thread.html;
+        emptyState = false;
+      } else {
+        messagesEl.innerHTML = emptyStateHTML();
+        emptyState = true;
+      }
+      currentAssistantEl = null;
 
-      // Notify extension of role change
+      // Notify extension
       vscode.postMessage({ type: 'roleChanged', role: role });
-
-      // Update status
       statusHint.textContent = role.charAt(0).toUpperCase() + role.slice(1) + ' mode';
+      scrollToBottom(true);
     });
 
     // ---- Scroll to bottom ----
