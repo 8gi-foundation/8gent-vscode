@@ -115,6 +115,11 @@ export function getChatHTML(
       flex-direction: column;
       gap: 2px;
       max-width: 95%;
+      animation: msgIn 0.2s ease-out;
+    }
+    @keyframes msgIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
     }
     .msg-wrap.user { align-self: flex-end; }
     .msg-wrap.assistant { align-self: flex-start; }
@@ -437,8 +442,12 @@ export function getChatHTML(
       border-radius: 6px;
       background: var(--vscode-input-background);
       padding: 4px;
+      transition: border-color 0.15s, box-shadow 0.15s;
     }
-    .input-wrap:focus-within { border-color: var(--vscode-focusBorder); }
+    .input-wrap:focus-within {
+      border-color: var(--vscode-focusBorder);
+      box-shadow: 0 0 0 1px var(--vscode-focusBorder);
+    }
     textarea {
       flex: 1;
       resize: none;
@@ -1207,16 +1216,19 @@ export function getChatHTML(
           break;
         }
         case 'restoreHistory': {
-          // Replay saved messages
+          // Replay saved messages (no animation)
           if (msg.messages && msg.messages.length) {
             clearEmptyState();
+            messagesEl.style.animation = 'none';
             for (const m of msg.messages) {
               if (m.role === 'user') {
-                addMessage('user', m.content);
+                const el = addMessage('user', m.content);
+                el.parentElement.style.animation = 'none';
               } else if (m.role === 'assistant') {
                 const el = addMessage('assistant', '', { html: true });
                 el.innerHTML = renderMarkdown(m.content, false);
                 el.setAttribute('data-raw', m.content);
+                el.parentElement.style.animation = 'none';
               }
             }
             scrollToBottom();
