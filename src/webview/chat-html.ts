@@ -20,6 +20,8 @@ export function getChatHTML(
   <style nonce="${nonce}">
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
+    html { height: 100%; overflow: hidden; }
+
     body {
       font-family: var(--vscode-font-family);
       font-size: var(--vscode-font-size);
@@ -27,7 +29,7 @@ export function getChatHTML(
       background: var(--vscode-sideBar-background);
       display: flex;
       flex-direction: column;
-      height: 100vh;
+      height: 100%;
       overflow: hidden;
     }
 
@@ -75,7 +77,8 @@ export function getChatHTML(
 
     /* ---- Messages ---- */
     .messages {
-      flex: 1;
+      flex: 1 1 0;
+      min-height: 0;
       overflow-y: auto;
       padding: 12px;
       display: flex;
