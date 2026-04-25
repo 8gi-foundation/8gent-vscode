@@ -203,6 +203,7 @@ export function getChatHTML(
       line-height: 1.5;
       color: var(--vscode-editor-foreground);
       tab-size: 2;
+      max-height: 400px;
     }
     /* Syntax highlighting using VS Code theme colors */
     .tok-kw { color: var(--vscode-debugTokenExpression-name, #569cd6); }
@@ -530,6 +531,8 @@ export function getChatHTML(
       color: var(--vscode-descriptionForeground);
       padding: 3px 6px 0;
       opacity: 0.5;
+      display: flex;
+      justify-content: space-between;
     }
   </style>
 </head>
@@ -585,6 +588,7 @@ export function getChatHTML(
     </div>
     <div class="input-hint">
       <span id="statusHint">Ready</span>
+      <span id="msgCount"></span>
     </div>
   </div>
 
@@ -907,7 +911,14 @@ export function getChatHTML(
 
       messagesEl.appendChild(wrap);
       scrollToBottom();
+      updateMsgCount();
       return msg;
+    }
+
+    function updateMsgCount() {
+      const count = messagesEl.querySelectorAll('.msg-wrap').length;
+      const el = document.getElementById('msgCount');
+      if (el) el.textContent = count > 0 ? count + ' messages' : '';
     }
 
     function addThinking() {
