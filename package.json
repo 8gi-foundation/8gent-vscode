@@ -2,7 +2,7 @@
   "name": "8gent-vscode",
   "displayName": "8gent",
   "description": "Local-first AI agent in your editor. Connects to Ollama, Apple Foundation Model, LM Studio, and your 8gent vessel.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "8gi-foundation",
   "license": "Apache-2.0",
   "repository": {
