@@ -368,6 +368,14 @@ async function handleChat(
 
     if (msg.includes("aborted")) {
       webview.postMessage({ type: "error", text: "Request cancelled" });
+    } else if (msg.includes("fetch failed") || msg.includes("ECONNREFUSED") || msg.includes("ECONNRESET") || msg.includes("network")) {
+      // Connection error - check if provider is still alive
+      const healthy = await currentProvider?.healthCheck();
+      if (healthy) {
+        webview.postMessage({ type: "error", text: "Temporary connection error. Please try again." });
+      } else {
+        webview.postMessage({ type: "error", text: `${currentProviderName} is offline. Start the service or click the provider badge to switch.` });
+      }
     } else {
       webview.postMessage({ type: "error", text: msg });
     }
