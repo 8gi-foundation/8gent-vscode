@@ -613,13 +613,19 @@ export function getChatHTML(
     let startTime = 0;
     let contextItems = [];
     let wordCount = 0;
+    let userScrolledAway = false;
 
     // ---- Scroll to bottom ----
     messagesEl.addEventListener('scroll', () => {
       const gap = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight;
       scrollBottomBtn.classList.toggle('visible', gap > 100);
+      // If user scrolls up during streaming, stop auto-scroll
+      if (streaming) {
+        userScrolledAway = gap > 150;
+      }
     });
     scrollBottomBtn.addEventListener('click', () => {
+      userScrolledAway = false;
       messagesEl.scrollTop = messagesEl.scrollHeight;
     });
 
@@ -656,7 +662,8 @@ export function getChatHTML(
       if (emptyState) { messagesEl.innerHTML = ''; emptyState = false; }
     }
 
-    function scrollToBottom() {
+    function scrollToBottom(force) {
+      if (!force && userScrolledAway) return;
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
@@ -669,11 +676,13 @@ export function getChatHTML(
         statusHint.textContent = 'Generating...';
         startTime = Date.now();
         wordCount = 0;
+        userScrolledAway = false;
       } else {
         actionBtn.className = 'action-btn send-btn';
         actionBtn.title = 'Send (Enter)';
         actionIcon.textContent = '\\u2191'; // up arrow
         actionBtn.disabled = false;
+        userScrolledAway = false;
       }
     }
 
