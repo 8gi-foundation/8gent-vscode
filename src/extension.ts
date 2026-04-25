@@ -124,7 +124,7 @@ export async function activate(context: vscode.ExtensionContext) {
       webviewView.webview.onDidReceiveMessage(async (msg) => {
         switch (msg.type) {
           case "chat":
-            await handleChat(msg.text, webviewView.webview, config.get("contextInjection", true));
+            await handleChat(msg.text, webviewView.webview, config.get("contextInjection", true), msg.role);
             break;
           case "stop":
             currentProvider?.abort();
@@ -311,7 +311,8 @@ async function saveHistory(): Promise<void> {
 async function handleChat(
   text: string,
   webview: vscode.Webview,
-  injectContext: boolean
+  injectContext: boolean,
+  role?: string
 ): Promise<void> {
   if (!currentProvider) {
     webview.postMessage({
@@ -326,6 +327,11 @@ async function handleChat(
   let ctx: WorkspaceContext | undefined;
   if (injectContext) {
     ctx = gatherContext();
+  } else {
+    ctx = {};
+  }
+  if (role) {
+    ctx.role = role as WorkspaceContext["role"];
   }
 
   // Include @mentioned files in context

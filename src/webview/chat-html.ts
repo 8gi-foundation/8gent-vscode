@@ -20,17 +20,21 @@ export function getChatHTML(
   <style nonce="${nonce}">
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    html, body { margin: 0; padding: 0; overflow: hidden; }
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
 
     body {
       font-family: var(--vscode-font-family);
       font-size: var(--vscode-font-size);
       color: var(--vscode-foreground);
       background: var(--vscode-sideBar-background);
+    }
+
+    #app {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
 
     /* ---- Header ---- */
@@ -74,6 +78,49 @@ export function getChatHTML(
       background: var(--vscode-toolbar-hoverBackground);
       color: var(--vscode-foreground);
     }
+
+    /* ---- Role tabs ---- */
+    .role-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-sideBar-background);
+      flex-shrink: 0;
+      padding: 0 6px;
+      gap: 2px;
+    }
+    .role-tab {
+      flex: 1;
+      padding: 5px 8px;
+      font-size: 11px;
+      font-family: var(--vscode-font-family);
+      border: none;
+      background: none;
+      color: var(--vscode-descriptionForeground);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .role-tab:hover {
+      color: var(--vscode-foreground);
+      background: var(--vscode-toolbar-hoverBackground);
+    }
+    .role-tab.active {
+      color: var(--vscode-foreground);
+      border-bottom-color: var(--vscode-focusBorder);
+      font-weight: 600;
+    }
+    .role-tab .role-dot {
+      display: inline-block;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+    .role-tab .role-dot.orchestrator { background: #4e9af5; }
+    .role-tab .role-dot.engineer { background: #1a7f37; }
+    .role-tab .role-dot.qa { background: #d29922; }
 
     /* ---- Messages ---- */
     .messages {
@@ -540,6 +587,7 @@ export function getChatHTML(
   </style>
 </head>
 <body>
+<div id="app">
   <div class="header">
     <div class="header-left">
       <span class="header-title">8gent</span>
@@ -552,7 +600,13 @@ export function getChatHTML(
     </div>
   </div>
 
-  <div style="position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;">
+  <div class="role-tabs" id="roleTabs">
+    <button class="role-tab active" data-role="orchestrator"><span class="role-dot orchestrator"></span>Orchestrator</button>
+    <button class="role-tab" data-role="engineer"><span class="role-dot engineer"></span>Engineer</button>
+    <button class="role-tab" data-role="qa"><span class="role-dot qa"></span>QA</button>
+  </div>
+
+  <div style="position: relative; flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden;">
     <div id="messages" class="messages">
       <div class="empty-state">
         <div class="logo">8</div>
@@ -594,6 +648,7 @@ export function getChatHTML(
       <span id="msgCount"></span>
     </div>
   </div>
+</div>
 
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
@@ -614,6 +669,32 @@ export function getChatHTML(
     let contextItems = [];
     let wordCount = 0;
     let userScrolledAway = false;
+    let activeRole = 'orchestrator';
+
+    // ---- Role tabs ----
+    const roleDescriptions = {
+      orchestrator: 'You are the orchestrator. You plan, delegate, and coordinate. Break complex tasks into sub-tasks. Think about architecture and approach before diving into code.',
+      engineer: 'You are the engineer. You write clean, efficient, production-ready code. Focus on implementation, best practices, and getting things done.',
+      qa: 'You are the QA engineer. You review code for bugs, edge cases, security issues, and test coverage. Be thorough and critical.'
+    };
+
+    document.getElementById('roleTabs').addEventListener('click', (e) => {
+      const tab = e.target.closest('.role-tab');
+      if (!tab || streaming) return;
+      const role = tab.dataset.role;
+      if (role === activeRole) return;
+
+      // Switch active tab
+      document.querySelectorAll('.role-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      activeRole = role;
+
+      // Notify extension of role change
+      vscode.postMessage({ type: 'roleChanged', role: role });
+
+      // Update status
+      statusHint.textContent = role.charAt(0).toUpperCase() + role.slice(1) + ' mode';
+    });
 
     // ---- Scroll to bottom ----
     messagesEl.addEventListener('scroll', () => {
@@ -995,7 +1076,7 @@ export function getChatHTML(
       setStreaming(true);
       addThinking();
 
-      vscode.postMessage({ type: 'chat', text });
+      vscode.postMessage({ type: 'chat', text, role: activeRole });
     }
 
     actionBtn.addEventListener('click', send);

@@ -11,6 +11,7 @@ export interface WorkspaceContext {
   selection?: { text: string; startLine: number; endLine: number };
   openFiles?: string[];
   workspaceRoot?: string;
+  role?: "orchestrator" | "engineer" | "qa";
 }
 
 /** Streamed response chunk from a provider */
