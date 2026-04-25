@@ -1138,6 +1138,8 @@ export function getChatHTML(
       { cmd: '/docs', desc: 'Add documentation', prompt: 'Add JSDoc/TSDoc comments to all functions and classes in this code.' },
       { cmd: '/optimize', desc: 'Optimize performance', prompt: 'Optimize this code for better performance. Explain what changed and why.' },
       { cmd: '/simplify', desc: 'Simplify complex code', prompt: 'Simplify this code. Remove unnecessary complexity while preserving functionality.' },
+      { cmd: '/security', desc: 'Security audit', prompt: 'Audit this code for security vulnerabilities. Check for injection, XSS, auth issues, and other OWASP top 10 risks.' },
+      { cmd: '/help', desc: 'Show shortcuts and tips', prompt: null },
     ];
     const slashList = document.getElementById('slashList');
     let slashActive = false;
@@ -1168,9 +1170,26 @@ export function getChatHTML(
     }
 
     function selectSlash(cmd) {
-      inputEl.value = cmd.prompt;
       slashActive = false;
       slashList.classList.remove('visible');
+      if (cmd.cmd === '/help') {
+        inputEl.value = '';
+        clearEmptyState();
+        const helpHtml = '<h3>8gent Shortcuts</h3>' +
+          '<p><strong>Chat:</strong> Type and press Enter. Shift+Enter for newline.</p>' +
+          '<p><strong>Cmd+L</strong> - Focus chat input</p>' +
+          '<p><strong>Cmd+Shift+8</strong> - Send selected code to chat</p>' +
+          '<p><strong>Esc</strong> - Stop generation</p>' +
+          '<p><strong>@filename</strong> - Add a file as context</p>' +
+          '<p><strong>/command</strong> - Run a slash command</p>' +
+          '<p><strong>Up/Down</strong> - Browse input history (when input is empty)</p>' +
+          '<hr style="border:none;border-top:1px solid var(--vscode-panel-border);margin:8px 0;">' +
+          '<p><strong>Slash commands:</strong></p>' +
+          SLASH_COMMANDS.filter(c => c.prompt).map(c => '<p><code>' + c.cmd + '</code> - ' + c.desc + '</p>').join('');
+        const el = addMessage('assistant', helpHtml, { html: true });
+        return;
+      }
+      inputEl.value = cmd.prompt;
       send();
     }
 
