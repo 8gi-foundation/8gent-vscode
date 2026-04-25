@@ -681,9 +681,9 @@ export function getChatHTML(
       const escaped = escapeHtml(code);
       // Comments
       let result = escaped
-        .replace(/(\/\/.*$)/gm, '<span class="tok-cm">$1</span>')
+        .replace(/(\\/\\/.*$)/gm, '<span class="tok-cm">$1</span>')
         .replace(/(#.*$)/gm, '<span class="tok-cm">$1</span>')
-        .replace(/(\/\\*[\\s\\S]*?\\*\/)/g, '<span class="tok-cm">$1</span>');
+        .replace(/(\\/\\*[\\s\\S]*?\\*\\/)/g, '<span class="tok-cm">$1</span>');
       // Strings (double, single, backtick)
       result = result.replace(/(&quot;(?:[^&]|&(?!quot;))*?&quot;)/g, '<span class="tok-str">$1</span>');
       result = result.replace(/('(?:[^'\\\\]|\\\\.)*?')/g, '<span class="tok-str">$1</span>');
