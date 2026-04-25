@@ -20,17 +20,17 @@ export function getChatHTML(
   <style nonce="${nonce}">
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    html { height: 100%; overflow: hidden; }
+    html, body { margin: 0; padding: 0; overflow: hidden; }
 
     body {
       font-family: var(--vscode-font-family);
       font-size: var(--vscode-font-size);
       color: var(--vscode-foreground);
       background: var(--vscode-sideBar-background);
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
       display: flex;
       flex-direction: column;
-      height: 100%;
-      overflow: hidden;
     }
 
     /* ---- Header ---- */
