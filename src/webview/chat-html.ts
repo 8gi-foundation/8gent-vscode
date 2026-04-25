@@ -465,7 +465,7 @@ export function getChatHTML(
     textarea::placeholder { color: var(--vscode-input-placeholderForeground); }
 
     /* @mention autocomplete */
-    .mention-list {
+    .mention-list, .slash-list {
       position: absolute;
       bottom: 100%;
       left: 0;
@@ -479,7 +479,7 @@ export function getChatHTML(
       z-index: 100;
       display: none;
     }
-    .mention-list.visible { display: block; }
+    .mention-list.visible, .slash-list.visible { display: block; }
     .mention-item {
       padding: 6px 10px;
       font-size: 12px;
@@ -575,9 +575,10 @@ export function getChatHTML(
     <div id="contextPills" class="context-pills" style="display:none;"></div>
     <div style="position: relative;">
       <div class="mention-list" id="mentionList"></div>
+      <div class="slash-list" id="slashList"></div>
     </div>
     <div class="input-wrap">
-      <textarea id="input" rows="1" placeholder="Ask 8gent... (@ to mention a file)" autofocus></textarea>
+      <textarea id="input" rows="1" placeholder="Ask 8gent... (@ for files, / for commands)" autofocus></textarea>
       <button class="action-btn send-btn" id="actionBtn" title="Send (Enter)">
         <span id="actionIcon">\u2191</span>
       </button>
@@ -1095,6 +1096,76 @@ export function getChatHTML(
     window.updatePillVisibility = function() {
       if (!contextPillsEl.children.length) contextPillsEl.style.display = 'none';
     };
+
+    // ---- Slash commands ----
+    const SLASH_COMMANDS = [
+      { cmd: '/explain', desc: 'Explain the current code', prompt: 'Explain this code in detail. What does it do, and why?' },
+      { cmd: '/fix', desc: 'Fix bugs in the code', prompt: 'Find and fix any bugs in this code. Show the corrected version.' },
+      { cmd: '/tests', desc: 'Generate tests', prompt: 'Write comprehensive tests for this code.' },
+      { cmd: '/refactor', desc: 'Refactor for readability', prompt: 'Refactor this code for better readability and maintainability. Show the improved version.' },
+      { cmd: '/types', desc: 'Add TypeScript types', prompt: 'Add proper TypeScript types and interfaces to this code.' },
+      { cmd: '/docs', desc: 'Add documentation', prompt: 'Add JSDoc/TSDoc comments to all functions and classes in this code.' },
+      { cmd: '/optimize', desc: 'Optimize performance', prompt: 'Optimize this code for better performance. Explain what changed and why.' },
+      { cmd: '/simplify', desc: 'Simplify complex code', prompt: 'Simplify this code. Remove unnecessary complexity while preserving functionality.' },
+    ];
+    const slashList = document.getElementById('slashList');
+    let slashActive = false;
+    let slashSelectedIndex = 0;
+
+    function checkSlashCommand() {
+      const val = inputEl.value;
+      if (val.startsWith('/') && !val.includes(' ')) {
+        const query = val.slice(1).toLowerCase();
+        const matches = SLASH_COMMANDS.filter(c => c.cmd.slice(1).startsWith(query));
+        if (matches.length && val.length > 0) {
+          slashList.innerHTML = '';
+          slashSelectedIndex = 0;
+          matches.forEach((c, i) => {
+            const item = document.createElement('div');
+            item.className = 'mention-item' + (i === 0 ? ' selected' : '');
+            item.innerHTML = '<span style="font-weight:600;font-size:12px;">' + c.cmd + '</span><span class="path">' + c.desc + '</span>';
+            item.onclick = () => selectSlash(c);
+            slashList.appendChild(item);
+          });
+          slashList.classList.add('visible');
+          slashActive = true;
+          return;
+        }
+      }
+      slashActive = false;
+      slashList.classList.remove('visible');
+    }
+
+    function selectSlash(cmd) {
+      inputEl.value = cmd.prompt;
+      slashActive = false;
+      slashList.classList.remove('visible');
+      send();
+    }
+
+    inputEl.addEventListener('input', checkSlashCommand);
+
+    inputEl.addEventListener('keydown', (e) => {
+      if (!slashActive || !slashList.classList.contains('visible')) return;
+      const items = slashList.querySelectorAll('.mention-item');
+      if (!items.length) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        slashSelectedIndex = Math.min(slashSelectedIndex + 1, items.length - 1);
+        items.forEach((el, i) => el.classList.toggle('selected', i === slashSelectedIndex));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        slashSelectedIndex = Math.max(slashSelectedIndex - 1, 0);
+        items.forEach((el, i) => el.classList.toggle('selected', i === slashSelectedIndex));
+      } else if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        const matches = SLASH_COMMANDS.filter(c => c.cmd.slice(1).startsWith(inputEl.value.slice(1).toLowerCase()));
+        if (matches[slashSelectedIndex]) selectSlash(matches[slashSelectedIndex]);
+      } else if (e.key === 'Escape') {
+        slashActive = false;
+        slashList.classList.remove('visible');
+      }
+    });
 
     // ---- Handle messages from extension ----
     let rawAssistantText = '';
