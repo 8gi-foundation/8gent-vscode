@@ -599,6 +599,7 @@ export function getChatHTML(
     <button class="role-tab active" data-role="orchestrator"><span class="role-dot orchestrator"></span>Orchestrator</button>
     <button class="role-tab" data-role="engineer"><span class="role-dot engineer"></span>Engineer</button>
     <button class="role-tab" data-role="qa"><span class="role-dot qa"></span>QA</button>
+    <button class="icon-btn" id="editPromptBtn" title="Edit system prompt" style="flex:0;font-size:12px;">\u270E</button>
   </div>
 
   <div id="messages" class="messages">
@@ -744,6 +745,9 @@ export function getChatHTML(
     // ---- Provider badge ----
     providerBtn.addEventListener('click', () => vscode.postMessage({ type: 'switchProvider' }));
     newChatBtn.addEventListener('click', () => vscode.postMessage({ type: 'newChat' }));
+    document.getElementById('editPromptBtn').addEventListener('click', () => {
+      vscode.postMessage({ type: 'editSystemPrompt' });
+    });
     document.getElementById('settingsBtn').addEventListener('click', () => {
       vscode.postMessage({ type: 'openSettings' });
     });
@@ -1523,6 +1527,14 @@ export function getChatHTML(
         }
         case 'focusInput': {
           inputEl.focus();
+          break;
+        }
+        case 'clearChat': {
+          messagesEl.innerHTML = emptyStateHTML();
+          emptyState = true;
+          currentAssistantEl = null;
+          threads[activeRole] = { html: '', messages: [], rawText: '' };
+          statusHint.textContent = 'Ready';
           break;
         }
       }

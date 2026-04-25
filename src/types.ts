@@ -12,6 +12,7 @@ export interface WorkspaceContext {
   openFiles?: string[];
   workspaceRoot?: string;
   role?: "orchestrator" | "engineer" | "qa";
+  customSystemPrompt?: string;
 }
 
 /** Streamed response chunk from a provider */

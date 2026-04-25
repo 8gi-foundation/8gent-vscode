@@ -30,7 +30,7 @@ export function buildSystemPrompt(ctx?: WorkspaceContext): string {
   const parts: string[] = [];
 
   const role = ctx?.role || "orchestrator";
-  const rolePrompt = ROLE_PROMPTS[role];
+  const rolePrompt = ctx?.customSystemPrompt || ROLE_PROMPTS[role];
   parts.push(rolePrompt + `
 
 General rules:
