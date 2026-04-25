@@ -861,14 +861,45 @@ export function getChatHTML(
         actions.appendChild(copyBtn);
 
         if (role === 'user') {
-          const retryBtn = document.createElement('button');
-          retryBtn.className = 'msg-action-btn';
-          retryBtn.textContent = 'Retry';
-          retryBtn.onclick = () => {
+          const editBtn = document.createElement('button');
+          editBtn.className = 'msg-action-btn';
+          editBtn.textContent = 'Edit';
+          editBtn.onclick = () => {
+            // Remove this message and everything after it
+            const allWraps = Array.from(messagesEl.querySelectorAll('.msg-wrap'));
+            const idx = allWraps.indexOf(wrap);
+            if (idx >= 0) {
+              for (let i = allWraps.length - 1; i >= idx; i--) {
+                allWraps[i].remove();
+              }
+            }
             inputEl.value = msg.textContent;
             inputEl.focus();
+            // Tell extension to truncate history
+            vscode.postMessage({ type: 'truncateHistory', index: idx });
           };
-          actions.appendChild(retryBtn);
+          actions.appendChild(editBtn);
+
+          const resendBtn = document.createElement('button');
+          resendBtn.className = 'msg-action-btn';
+          resendBtn.textContent = 'Resend';
+          resendBtn.onclick = () => {
+            // Remove everything after this user message
+            const allWraps = Array.from(messagesEl.querySelectorAll('.msg-wrap'));
+            const idx = allWraps.indexOf(wrap);
+            if (idx >= 0) {
+              for (let i = allWraps.length - 1; i > idx; i--) {
+                allWraps[i].remove();
+              }
+            }
+            // Resend the same message
+            const text = msg.textContent;
+            vscode.postMessage({ type: 'truncateHistory', index: idx });
+            setStreaming(true);
+            addThinking();
+            vscode.postMessage({ type: 'chat', text: text });
+          };
+          actions.appendChild(resendBtn);
         }
 
         wrap.appendChild(actions);

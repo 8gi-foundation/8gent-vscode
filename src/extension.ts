@@ -144,6 +144,14 @@ export async function activate(context: vscode.ExtensionContext) {
           case "openSettings":
             vscode.commands.executeCommand("workbench.action.openSettings", "8gent");
             break;
+          case "truncateHistory":
+            // Remove messages from index onwards (for edit & resend)
+            if (typeof msg.index === "number" && msg.index >= 0) {
+              // Each visible msg-wrap corresponds to a chatHistory entry
+              chatHistory = chatHistory.slice(0, msg.index);
+              saveHistory();
+            }
+            break;
           case "switchProvider":
             vscode.commands.executeCommand("8gent.switchProvider");
             break;
