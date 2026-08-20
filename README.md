@@ -1,6 +1,12 @@
 # 8gent for VS Code
 
-Local-first AI agent in your editor. Connects to Ollama, Apple Foundation Model, LM Studio, and your 8gent vessel.
+Local-first AI agent in your editor, for developers who want a coding assistant
+that talks to a model on their own machine. Connects to Ollama, Apple Foundation
+Model, LM Studio, OpenRouter, and your 8gent vessel.
+
+Install the `.vsix` from a release, or build it yourself: `npm install && npm run package`,
+then `code --install-extension 8gent-vscode-<version>.vsix`. Open the 8gent view in the
+activity bar and start a chat. Works in VS Code, Cursor, Windsurf, and any VS Code fork.
 
 ## Features
 
@@ -24,9 +30,11 @@ Local-first AI agent in your editor. Connects to Ollama, Apple Foundation Model,
 ## Commands
 
 - `8gent: New Chat` - Start a fresh conversation
-- `8gent: Send Selection to Chat` - Send selected code to chat (Cmd+Shift+8)
-- `8gent: Switch Provider` - Pick a different AI provider
-- `8gent: Reconnect` - Reconnect to current provider
+- `8gent: Send Selection to Chat` - Send selected code to chat (Cmd+Shift+8, when there is a selection)
+- `8gent: Focus Chat` - Jump to the chat view (Cmd+L)
+- `8gent: Switch Provider` - Pick a different provider
+- `8gent: Pick Model` - Pick a model on the current provider
+- `8gent: Reconnect to Provider` - Reconnect to the current provider
 
 ## Settings
 
@@ -36,9 +44,12 @@ Local-first AI agent in your editor. Connects to Ollama, Apple Foundation Model,
 | `8gent.ollama.endpoint` | `http://localhost:11434` | Ollama API URL |
 | `8gent.ollama.model` | `qwen2.5-coder:7b` | Ollama model |
 | `8gent.lmstudio.endpoint` | `http://localhost:1234` | LM Studio API URL |
-| `8gent.vessel.url` | | Vessel WebSocket URL |
-| `8gent.contextInjection` | `true` | Include workspace context |
-| `8gent.syncEnabled` | `false` | Cloud sync via 8gent.app |
+| `8gent.lmstudio.model` | | LM Studio model (empty uses the loaded default) |
+| `8gent.vessel.url` | | Vessel daemon WebSocket URL |
+| `8gent.vessel.channel` | `app` | Session channel tag for the vessel |
+| `8gent.openrouter.model` | `auto:free` | OpenRouter model id |
+| `8gent.contextInjection` | `true` | Include current file, selection, and open tabs as context |
+| `8gent.syncEnabled` | `false` | Cloud sync via 8gent.app (requires login) |
 
 ## Development
 
