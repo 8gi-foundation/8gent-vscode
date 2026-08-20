@@ -4,8 +4,9 @@ Local-first AI agent in your editor, for developers who want a coding assistant
 that talks to a model on their own machine. Connects to Ollama, Apple Foundation
 Model, LM Studio, OpenRouter, and your 8gent vessel.
 
-Install the `.vsix` from a release, or build it yourself: `npm install && npm run package`,
-then `code --install-extension 8gent-vscode-<version>.vsix`. Open the 8gent view in the
+There is no marketplace listing and no published release yet, so you build it:
+`npm install && npm run build && npx vsce package`, then
+`code --install-extension 8gent-vscode-<version>.vsix`. Open the 8gent view in the
 activity bar and start a chat. Works in VS Code, Cursor, Windsurf, and any VS Code fork.
 
 ## Features
