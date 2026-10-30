@@ -116,7 +116,7 @@
         "8gent.vessel.url": {
           "type": "string",
           "default": "",
-          "description": "Vessel daemon WebSocket URL (e.g. ws://localhost:18789 or wss://eight-vessel.fly.dev)"
+          "description": "Vessel daemon WebSocket URL (e.g. ws://localhost:18789 or wss://vessel.example.com)"
         },
         "8gent.vessel.channel": {
           "type": "string",
